@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>業務タスク ダッシュボード | KIYORA</title>
+<style>
+  :root{
+    --navy:#1F3864; --navy-deep:#162a4d; --gold:#C9A24B; --gold-soft:#E9D8A6;
+    --ink:#1c2230; --muted:#5c6679; --line:#d9dee7; --bg:#f4f6fa; --card:#ffffff;
+    --ok:#0F6E56; --warn:#854F0B; --crit:#A32D2D;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Yu Gothic","YuGothic","Hiragino Kaku Gothic ProN",sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.7; padding:0 0 64px;}
+  .topbar{background:linear-gradient(100deg,var(--navy),var(--navy-deep)); color:#fff;
+    padding:16px 24px; border-bottom:3px solid var(--gold); display:flex; align-items:center; gap:14px;}
+  .topbar .brand{font-size:18px;font-weight:700;letter-spacing:.12em}
+  .topbar .sub{font-size:13px;color:var(--gold-soft)}
+  .topbar .conf{margin-left:auto;font-size:11px;border:1px solid var(--crit);background:rgba(163,32,32,.25);padding:3px 9px;border-radius:3px}
+  .topbar a{color:#fff;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:6px}
+  .wrap{max-width:920px;margin:24px auto 0;padding:0 18px}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+  .mcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .mcard .l{font-size:12px;color:var(--muted)}
+  .mcard .v{font-size:24px;font-weight:700;color:var(--navy)}
+  .sec-head{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+  .sec-head .t{font-size:16px;font-weight:700;color:var(--navy)}
+  .sec-head .d{font-size:12px;color:var(--muted)}
+  .sec-head .sp{margin-left:auto;display:flex;gap:8px;align-items:center}
+  select{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:#fcfdff;color:var(--ink)}
+  .list{display:flex;flex-direction:column;gap:8px;margin-bottom:28px}
+  .task{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:0 10px 10px 0;padding:11px 14px}
+  .task .row1{display:flex;align-items:center;gap:8px}
+  .task .nm{font-size:14px;font-weight:500}
+  .tag{font-size:10.5px;border-radius:3px;padding:1px 6px;border:1px solid currentColor}
+  .task .meta{margin-left:auto;font-size:11.5px;color:var(--muted)}
+  .task .row2{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .bar{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+  .bar>i{display:block;height:100%}
+  .pct{font-size:11.5px;color:var(--muted);min-width:34px;text-align:right}
+  .btn{font:inherit;font-weight:500;border-radius:7px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--navy)}
+  .btn.upd{font-size:11.5px;padding:5px 11px}
+  .btn.primary{background:var(--navy);color:#fff;border:none}
+  .cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .dow{font-size:11px;color:var(--muted);text-align:center;padding:2px 0}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px}
+  .cell{min-height:62px;border:1px solid var(--line);border-radius:7px;padding:3px 4px;background:var(--card)}
+  .cell.today{border-color:var(--navy);background:rgba(31,56,100,.05)}
+  .cell .dn{font-size:10px;color:var(--muted)}
+  .chip{font-size:9.5px;color:#fff;border-radius:3px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 6px;font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .ov{position:fixed;inset:0;background:rgba(22,42,77,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:18px}
+  .ov.on{display:flex}
+  .modal{background:var(--card);border-radius:12px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:18px 20px}
+  .modal h3{font-size:15px;color:var(--navy)}
+  .step{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;background:#fff;margin-bottom:6px}
+  .step:hover{background:var(--bg)}
+  .step.cur{opacity:.7}
+  .step.sel{border:2px solid var(--navy);background:rgba(31,56,100,.05)}
+  .step .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .step .lab{font-size:13px}
+  .step .pc{margin-left:auto;font-size:11px;color:var(--muted)}
+  textarea{width:100%;min-height:58px;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fcfdff}
+  .muted{color:var(--muted);font-size:12px}
+  .loading{text-align:center;padding:40px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="brand">KIYORA</span><span class="sub">業務タスク ダッシュボード</span>
+    <a href="/">＋ 新規タスク登録</a>
+    <span class="conf">社内機密</span>
+  </div>
+
+  <div class="wrap">
+    <div class="cards" id="cards"></div>
+
+    <div class="sec-head">
+      <span class="t">今日やること</span><span class="d">期限順・進捗はその場で更新</span>
+      <div class="sp">
+        <select id="memberFilter"><option value="all">全員</option><option>菱沼翼</option><option>松田萌華</option><option>林優作</option></select>
+      </div>
+    </div>
+    <div class="list" id="list"><div class="loading">読み込み中…</div></div>
+
+    <div class="sec-head">
+      <span class="t">カレンダー</span><span class="d">タスク管理用</span>
+      <div class="sp">
+        <label class="muted">色分け</label>
+        <select id="colorMode"><option value="member">担当者で自動</option><option value="goal">連動目標で</option><option value="status">ステータスで</option></select>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="cal-head"><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div><div class="dow">日</div></div>
+    <div class="cal" id="cal"></div>
+  </div>
+
+  <div class="ov" id="ov">
+    <div class="modal">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <h3 id="mTitle">タスク名</h3>
+        <span style="margin-left:auto;cursor:pointer;color:var(--muted)" id="mClose">✕</span>
+      </div>
+      <div class="muted" style="margin-bottom:12px" id="mMeta"></div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <label class="muted">種別</label>
+        <select id="mType"><option>書類作成</option><option selected>外部連絡</option><option>調査・検討</option><option>実作業</option><option>カスタム</option></select>
+        <span class="muted" style="margin-left:auto">ぴったり無ければ少し手前（下）を</span>
+      </div>
+
+      <div id="mSteps" style="margin-bottom:14px"></div>
+
+      <div class="muted" style="margin-bottom:4px">この回のひとことメモ（任意）</div>
+      <textarea id="mMemo" placeholder="例）先方の様式が届いたので記入中。明日午前に送れそう。" style="margin-bottom:14px"></textarea>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label class="muted">ステータス</label>
+          <select id="mStatus"><option>進行中</option><option>未着手</option><option>完了</option><option>繰越</option><option>ブロック</option><option>取下げ</option></select>
+        </div>
+        <div id="mBlockWrap" style="display:none;align-items:center;gap:8px">
+          <label class="muted">理由</label>
+          <select id="mBlockCause"><option>他者待ち</option><option>外部依存</option><option>情報不足</option></select>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg);border-radius:8px;margin-bottom:14px">
+        <span class="muted">今回の動き</span><span id="mDelta" style="font-size:13px;font-weight:500">—</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">進捗ログに追記されます</span>
+      </div>
+
+      <button class="btn primary" id="mSave" style="width:100%;height:42px;font-size:14px">記録する</button>
+      <div class="muted" style="text-align:center;margin-top:8px">記録は上書きされません。毎回 追記され、揺れ動きが残ります。</div>
+    </div>
+  </div>
+
+<script>
+const LADDER = {
+  "書類作成":["まだ手をつけてない","構成・骨子を考えた","たたき台を書き始めた","半分書けた","ほぼ書けた","見直し・確認中","完成・提出した"],
+  "外部連絡":["まだ手をつけてない","内容を確認した","下書きを始めた","半分くらい書けた","ほぼ書き終えた","確認待ち・送る直前","送信した・完了"],
+  "調査・検討":["まだ手をつけてない","論点を洗い出した","情報を集め始めた","材料が半分揃った","ほぼ揃った","結論が見えてきた","結論を出した・まとめた"],
+  "実作業":["まだ手をつけてない","段取りを確認した","始めた","半分終わった","ほぼ終わった","残り少し・最終確認","完了した"],
+  "カスタム":["0%","少し進んだ","着手した","半分","ほぼ","もう少し","完了"],
+};
+const PCTS = [0,15,30,50,70,85,100];
+const memberColor = {"菱沼翼":"#185FA5","松田萌華":"#1D9E75","林優作":"#BA7517"};
+const goalColor = {"OEM契約":"#534AB7","100病院":"#185FA5","海外商談":"#D4537E","資金調達":"#1D9E75","知財":"#BA7517","組織":"#993C1D","その他":"#888780","なし":"#888780"};
+const statusColor = {"未着手":"#888780","進行中":"#185FA5","完了":"#1D9E75","繰越":"#BA7517","ブロック":"#A32D2D","取下げ":"#5F5E5A"};
+
+let TASKS = [];
+let active = null;     // 更新対象タスク
+let selStep = null;    // 選択中の段階index
+
+const $ = (s)=>document.querySelector(s);
+const fmtDay = (iso)=> iso ? `${(+iso.slice(5,7))}/${(+iso.slice(8,10))}` : "期限なし";
+
+function colorOf(t, mode){
+  if(mode==="goal") return goalColor[t.goal]||"#888780";
+  if(mode==="status") return statusColor[t.status]||"#888780";
+  return memberColor[t.member]||"#888780";
+}
+function nearestStep(p){ let bi=0,bd=999; PCTS.forEach((v,i)=>{const d=Math.abs(v-(p||0));if(d<bd){bd=d;bi=i;}}); return bi; }
+
+async function load(){
+  try{
+    const r = await fetch("/api/task-list");
+    const d = await r.json();
+    if(!d.ok){ $("#list").innerHTML = `<div class="loading">取得失敗：${d.error||""}</div>`; return; }
+    TASKS = d.tasks||[];
+    renderAll();
+  }catch(e){ $("#list").innerHTML = `<div class="loading">通信エラー：${e.message}</div>`; }
+}
+
+function renderCards(){
+  const todayISO = new Date().toISOString().slice(0,10);
+  const todayN = TASKS.filter(t=> !t.due || t.due<=todayISO).length;
+  const prog = TASKS.filter(t=>t.status==="進行中").length;
+  const stuck = TASKS.filter(t=>t.status==="繰越"||t.status==="ブロック").length;
+  const dele = TASKS.filter(t=>t.delegatable).length;
+  $("#cards").innerHTML = `
+    <div class="mcard"><div class="l">今日のタスク</div><div class="v">${todayN}</div></div>
+    <div class="mcard"><div class="l">進行中</div><div class="v">${prog}</div></div>
+    <div class="mcard"><div class="l">繰越・滞留</div><div class="v" style="color:var(--crit)">${stuck}</div></div>
+    <div class="mcard"><div class="l">委譲募集中</div><div class="v" style="color:var(--warn)">${dele}</div></div>`;
+}
+
+function renderList(){
+  const f = $("#memberFilter").value, mode = $("#colorMode").value;
+  const list = TASKS.filter(t=> f==="all"||t.member===f);
+  $("#list").innerHTML = list.map(t=>{
+    const c = colorOf(t,mode), idx = TASKS.indexOf(t);
+    const stuck = t.status==="繰越"||t.status==="ブロック";
+    return `<div class="task" style="border-left-color:${c}">
+      <div class="row1">
+        <span class="nm">${esc(t.name)}</span>
+        ${stuck?`<span class="tag" style="color:var(--crit)">滞留</span>`:""}
+        ${t.delegatable?`<span class="tag" style="color:var(--warn)">委譲OK</span>`:""}
+        <span class="meta">${t.member||"未設定"}・${fmtDay(t.due)}</span>
+      </div>
+      <div class="row2">
+        <div class="bar"><i style="width:${t.current||0}%;background:${c}"></i></div>
+        <span class="pct">${t.current||0}%</span>
+        <button class="btn upd" onclick="openModal(${idx})">更新</button>
+      </div>
+    </div>`;
+  }).join("") || `<div class="loading">該当タスクなし</div>`;
+}
+
+function renderLegend(){
+  const mode = $("#colorMode").value;
+  const map = mode==="goal"?goalColor : mode==="status"?statusColor : memberColor;
+  $("#legend").innerHTML = Object.entries(map).map(([k,c])=>
+    `<span><span class="sw" style="background:${c}"></span>${k}</span>`).join("");
+}
+
+function renderCal(){
+  const mode = $("#colorMode").value, f = $("#memberFilter").value;
+  const now = new Date(), y=now.getFullYear(), m=now.getMonth();
+  const first = new Date(y,m,1); let startDow = (first.getDay()+6)%7;
+  const days = new Date(y,m+1,0).getDate();
+  let cells = "";
+  for(let i=0;i<startDow;i++) cells+=`<div></div>`;
+  for(let d=1; d<=days; d++){
+    const iso = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const isToday = (d===now.getDate());
+    const dt = TASKS.filter(t=> t.due===iso && (f==="all"||t.member===f));
+    const chips = dt.map(t=>{const c=colorOf(t,mode);const idx=TASKS.indexOf(t);
+      return `<div class="chip" style="background:${c}" onclick="openModal(${idx})">${esc(t.name)}</div>`;}).join("");
+    cells += `<div class="cell ${isToday?'today':''}"><div class="dn" style="${isToday?'color:var(--navy);font-weight:500':''}">${d}</div>${chips}</div>`;
+  }
+  $("#cal").innerHTML = cells;
+}
+
+function renderAll(){ renderCards(); renderList(); renderLegend(); renderCal(); }
+
+function renderSteps(){
+  const type = $("#mType").value, labels = LADDER[type];
+  const curIdx = nearestStep(active.current);
+  $("#mSteps").innerHTML = labels.map((lab,i)=>{
+    const filled = i<=(selStep!==null?selStep:curIdx);
+    return `<div class="step ${i===curIdx?'cur':''} ${i===selStep?'sel':''}" onclick="pickStep(${i})">
+      <span class="dot" style="background:${filled?'#185FA5':'var(--line)'}"></span>
+      <span class="lab">${lab}</span>
+      ${i===curIdx?'<span class="muted" style="margin-left:6px">いまここ</span>':''}
+      <span class="pc">${PCTS[i]}%</span></div>`;
+  }).join("");
+  updDelta();
+}
+function pickStep(i){ selStep=i; renderSteps(); }
+function updDelta(){
+  if(selStep===null){ $("#mDelta").textContent="—"; return; }
+  const np=PCTS[selStep], cur=active.current||0, d=np-cur;
+  $("#mDelta").textContent = `${cur}% → ${np}%（${d>0?'+':''}${d}）`;
+  $("#mDelta").style.color = d>0?"var(--ok)":(d<0?"var(--crit)":"var(--ink)");
+}
+
+function openModal(idx){
+  active = TASKS[idx]; selStep=null;
+  $("#mTitle").textContent = active.name;
+  $("#mMeta").textContent = `担当：${active.member||"未設定"}　現在 ${active.current||0}%　${active.status}`;
+  $("#mStatus").value = active.status||"進行中";
+  $("#mMemo").value = "";
+  $("#mType").value = "外部連絡";
+  toggleBlock();
+  renderSteps();
+  $("#ov").classList.add("on");
+}
+function closeModal(){ $("#ov").classList.remove("on"); active=null; }
+function toggleBlock(){
+  const b = ["繰越","ブロック"].includes($("#mStatus").value);
+  $("#mBlockWrap").style.display = b?"flex":"none";
+}
+
+async function save(){
+  if(!active) return;
+  const after = (selStep!==null)?PCTS[selStep]:(active.current||0);
+  const status = $("#mStatus").value;
+  const payload = {
+    taskId: active.id, member: active.member, before: active.current||0, after,
+    memo: $("#mMemo").value.trim()||null, status,
+    blockCause: ["繰越","ブロック"].includes(status)?$("#mBlockCause").value:null,
+    blockReason: ["繰越","ブロック"].includes(status)?($("#mMemo").value.trim()||null):null,
+  };
+  const btn=$("#mSave"); btn.disabled=true; btn.textContent="記録中…";
+  try{
+    const r = await fetch("/api/log-append",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const d = await r.json();
+    if(d.ok){ closeModal(); await load(); }
+    else { alert("記録失敗："+(d.error||"")); }
+  }catch(e){ alert("通信エラー："+e.message); }
+  finally{ btn.disabled=false; btn.textContent="記録する"; }
+}
+
+function esc(s){ return String(s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+$("#memberFilter").addEventListener("change", renderAll);
+$("#colorMode").addEventListener("change", renderAll);
+$("#mType").addEventListener("change", ()=>{ selStep=null; renderSteps(); });
+$("#mStatus").addEventListener("change", toggleBlock);
+$("#mClose").addEventListener("click", closeModal);
+$("#ov").addEventListener("click",(e)=>{ if(e.target.id==="ov") closeModal(); });
+$("#mSave").addEventListener("click", save);
+
+load();
+</script>
+</body>
+</html>
