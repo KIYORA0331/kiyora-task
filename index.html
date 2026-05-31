@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>業務タスク登録 | KIYORA</title>
+<style>
+  :root{
+    --navy:#1F3864; --navy-deep:#162a4d; --gold:#C9A24B; --gold-soft:#E9D8A6;
+    --ink:#1c2230; --muted:#5c6679; --line:#d9dee7; --bg:#f4f6fa; --card:#ffffff;
+    --ok:#1f7a4d; --warn:#b4541f; --crit:#a32020;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Yu Gothic","YuGothic","Hiragino Kaku Gothic ProN",sans-serif;
+    background:
+      radial-gradient(900px 380px at 88% -8%, rgba(31,56,100,.06), transparent),
+      var(--bg);
+    color:var(--ink); line-height:1.7; padding:0 0 64px;
+  }
+  .topbar{
+    background:linear-gradient(100deg,var(--navy) 0%,var(--navy-deep) 100%);
+    color:#fff; padding:18px 24px; border-bottom:3px solid var(--gold);
+    display:flex; align-items:baseline; gap:14px;
+  }
+  .topbar .brand{font-size:18px;font-weight:700;letter-spacing:.14em}
+  .topbar .sub{font-size:12px;color:var(--gold-soft);letter-spacing:.08em}
+  .topbar .conf{margin-left:auto;font-size:11px;color:#fff;border:1px solid var(--crit);
+    background:rgba(163,32,32,.22);padding:3px 9px;border-radius:3px;letter-spacing:.06em}
+  .wrap{max-width:680px;margin:28px auto 0;padding:0 18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:22px 22px 24px;margin-bottom:18px;box-shadow:0 1px 2px rgba(22,42,77,.04)}
+  .title{font-size:20px;font-weight:700;color:var(--navy);letter-spacing:.02em}
+  .title .en{display:block;font-size:11px;font-style:italic;color:var(--muted);font-weight:400;letter-spacing:.12em;margin-top:2px}
+  .lead{font-size:13px;color:var(--muted);margin-top:8px}
+  label{display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:0 0 6px;letter-spacing:.03em}
+  .hint{font-size:11.5px;color:var(--muted);font-weight:400;margin-left:6px}
+  textarea,input[type=text],select{
+    width:100%;font:inherit;font-size:14px;color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fcfdff;
+  }
+  textarea{min-height:96px;resize:vertical}
+  textarea:focus,input:focus,select:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(31,56,100,.12)}
+  .field{margin-bottom:16px}
+  .btn{font:inherit;font-weight:700;letter-spacing:.04em;border:none;border-radius:8px;cursor:pointer;transition:.15s}
+  .btn-ghost{background:#eef1f7;color:var(--navy);padding:9px 16px;font-size:13px;border:1px solid var(--line)}
+  .btn-ghost:hover{background:#e3e8f2}
+  .btn-primary{background:linear-gradient(100deg,var(--navy),var(--navy-deep));color:#fff;padding:13px 22px;font-size:15px;width:100%}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  .parsed{border:1px dashed var(--gold);background:linear-gradient(0deg,rgba(201,162,75,.05),rgba(201,162,75,.05));border-radius:10px;padding:14px 16px;margin-top:4px}
+  .parsed-head{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px;letter-spacing:.04em}
+  .parsed-head .tag{font-style:italic;font-weight:400;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:520px){.grid2{grid-template-columns:1fr}}
+  .row-inline{display:flex;align-items:center;gap:10px;margin-top:4px}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);font-weight:400;cursor:pointer}
+  .chk input{width:17px;height:17px;accent-color:var(--navy)}
+  .note{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;
+    background:var(--navy);color:#fff;padding:12px 20px;border-radius:8px;font-size:13.5px;
+    box-shadow:0 8px 24px rgba(22,42,77,.25);transition:.25s;pointer-events:none;border-left:3px solid var(--gold);max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:var(--crit);border-left-color:#fff}
+  .divider{height:1px;background:var(--line);margin:18px 0}
+  .footer{text-align:center;font-size:11px;color:var(--muted);font-style:italic;margin-top:24px}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="brand">KIYORA</span>
+    <span class="sub">業務タスク登録</span>
+    <span class="conf">社内機密</span>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="title">タスクを登録する<span class="en">Task Intake — clinical to cosmos</span></div>
+      <p class="lead">やることを普通の文章で書いてください。担当者・期限・連動目標は自動で読み取って、下に出します（あとから直せます）。</p>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>やること（自由記述）<span class="hint">例：Foremountに見積の返信 松田さん 明日まで 重要</span></label>
+        <textarea id="freeText" placeholder="例）来週月曜までにVincent向けの提案資料をまとめる。海外商談用。"></textarea>
+      </div>
+      <button class="btn btn-ghost" id="parseBtn">文章を解析する</button>
+
+      <div id="parsedBox" class="parsed" style="display:none">
+        <div class="parsed-head">自動で読み取った内容 <span class="tag">— 違っていたら直してください</span></div>
+
+        <div class="field">
+          <label>タスク名</label>
+          <input type="text" id="taskName" placeholder="短い見出し" />
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label>担当者</label>
+            <select id="assignee">
+              <option value="">（未設定）</option>
+              <option>菱沼翼</option><option>松田萌華</option><option>林優作</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>期限</label>
+            <input type="text" id="due" placeholder="YYYY-MM-DD" />
+          </div>
+          <div class="field">
+            <label>連動目標</label>
+            <select id="linkedGoal">
+              <option value="">なし</option>
+              <option>100病院</option><option>OEM契約</option><option>海外商談</option>
+              <option>資金調達</option><option>知財</option><option>組織</option><option>その他</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>重み（貢献度）</label>
+            <select id="weight">
+              <option>大</option><option selected>中</option><option>小</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>タスク種別</label>
+            <select id="taskType">
+              <option selected>やること</option><option>やるべきこと</option><option>やらないこと</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>提案者</label>
+            <select id="proposer">
+              <option selected>菱沼翼</option><option>松田萌華</option><option>林優作</option><option>本人セルフ</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row-inline">
+          <label class="chk"><input type="checkbox" id="delegatable" /> 他のメンバーに委譲してもよい（引き受け募集中にする）</label>
+        </div>
+
+        <div class="divider"></div>
+        <button class="btn btn-primary" id="submitBtn">タスクを登録</button>
+        <p class="note">登録すると到達度0%・ステータス「未着手」で作られます。進捗はダッシュボードから更新します。</p>
+      </div>
+    </div>
+
+    <div class="footer">臨床から宇宙へ。KIYORAは医療の未来を創る。</div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+<script type="module">
+  // ---- 日付パーサ：chrono-node（日本語）を試み、失敗時は簡易フォールバック ----
+  let chrono = null;
+  try {
+    chrono = await import("https://esm.sh/chrono-node@2.7.4");
+  } catch (e) { chrono = null; }
+
+  const pad = (n)=>String(n).padStart(2,"0");
+  const toISO = (d)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  function fallbackDate(text){
+    const now = new Date();
+    if(/今日|本日|至急|今日中|ASAP/i.test(text)) return toISO(now);
+    if(/明日/.test(text)){ const d=new Date(now); d.setDate(d.getDate()+1); return toISO(d); }
+    if(/明後日/.test(text)){ const d=new Date(now); d.setDate(d.getDate()+2); return toISO(d); }
+    let m = text.match(/(\d{1,2})\s*[\/月]\s*(\d{1,2})/);
+    if(m){ const mo=+m[1], da=+m[2]; let y=now.getFullYear();
+      const cand=new Date(y,mo-1,da); if(cand < now) y++; return `${y}-${pad(mo)}-${pad(da)}`; }
+    m = text.match(/(\d+)\s*日後/);
+    if(m){ const d=new Date(now); d.setDate(d.getDate()+ +m[1]); return toISO(d); }
+    return "";
+  }
+
+  function parseDue(text){
+    // 緊急ワードは最優先で本日
+    if(/至急|今日中|ASAP/i.test(text)) return toISO(new Date());
+    if(chrono && chrono.ja){
+      try{
+        const d = chrono.ja.parseDate(text, new Date(), { forwardDate:true });
+        if(d) return toISO(d);
+      }catch(e){}
+    }
+    return fallbackDate(text);
+  }
+
+  // ---- 辞書（ひっしー確認済み叩き台） ----
+  const MEMBER = [
+    { re:/ひっしー|菱沼|翼|代表/, name:"菱沼翼" },
+    { re:/松田|萌華|もえか|ＰＭ|PM/, name:"松田萌華" },
+    { re:/林|優作|経理/, name:"林優作" },
+  ];
+  const GOAL = [
+    { re:/Foremount|Vincent|OEM|見積/i, name:"OEM契約" },
+    { re:/病院|サンプル|施設|導入/, name:"100病院" },
+    { re:/海外|輸出|ASEAN|中国|台湾|商談/i, name:"海外商談" },
+    { re:/VC|融資|補助金|公庫|資金/i, name:"資金調達" },
+    { re:/特許|PCT|出願|弁理士|知財/i, name:"知財" },
+    { re:/採用|入社|オンボーディング|組織/, name:"組織" },
+  ];
+  function parseWeight(text){
+    if(/重要|コア|最優先|最重要/.test(text)) return "大";
+    if(/補助|サブ|余裕/.test(text)) return "小";
+    return "中";
+  }
+  function firstMatch(list, text){ for(const x of list){ if(x.re.test(text)) return x.name; } return ""; }
+
+  function deriveTitle(text){
+    const line = (text.split(/\n/)[0] || text).trim();
+    return line.length > 40 ? line.slice(0,40)+"…" : line;
+  }
+
+  const $ = (id)=>document.getElementById(id);
+
+  $("parseBtn").addEventListener("click", ()=>{
+    const text = $("freeText").value.trim();
+    if(!text){ toast("文章を入力してください", true); return; }
+    $("taskName").value   = deriveTitle(text);
+    $("assignee").value   = firstMatch(MEMBER, text);
+    $("linkedGoal").value = firstMatch(GOAL, text);
+    $("weight").value     = parseWeight(text);
+    $("due").value        = parseDue(text);
+    $("parsedBox").style.display = "block";
+    $("parsedBox").scrollIntoView({behavior:"smooth", block:"nearest"});
+  });
+
+  $("submitBtn").addEventListener("click", async ()=>{
+    const name = $("taskName").value.trim();
+    if(!name){ toast("タスク名を入力してください", true); return; }
+    const payload = {
+      taskName: name,
+      assignee: $("assignee").value || null,
+      proposer: $("proposer").value || null,
+      what: $("freeText").value.trim(),
+      original: $("freeText").value.trim(),
+      due: $("due").value.trim() || null,
+      taskType: $("taskType").value,
+      linkedGoal: $("linkedGoal").value || null,
+      weight: $("weight").value,
+      delegatable: $("delegatable").checked,
+    };
+    const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "登録中…";
+    try{
+      const r = await fetch("/api/task-create", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      if(data.ok){
+        toast("登録しました");
+        $("freeText").value=""; $("parsedBox").style.display="none";
+      }else{
+        toast("登録失敗：" + (data.error||"不明なエラー"), true);
+      }
+    }catch(e){ toast("通信エラー：" + e.message, true); }
+    finally{ btn.disabled=false; btn.textContent="タスクを登録"; }
+  });
+
+  let toastTimer;
+  function toast(msg, isErr){
+    const t = $("toast"); t.textContent = msg;
+    t.className = "toast show" + (isErr ? " err" : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{ t.className = "toast" + (isErr?" err":""); }, 3200);
+  }
+</script>
+</body>
+</html>
