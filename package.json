@@ -1,0 +1,7 @@
+{
+  "name": "kiyora-task",
+  "version": "1.0.0",
+  "description": "KIYORA 業務タスク管理システム（HR系とは完全独立）",
+  "type": "module",
+  "private": true
+}
