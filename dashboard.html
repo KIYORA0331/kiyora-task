@@ -167,6 +167,9 @@ function nearestStep(p){ let bi=0,bd=999; PCTS.forEach((v,i)=>{const d=Math.abs(
 
 async function load(){
   try{
+    // 表示時に1回だけ翌日繰越を実行（cron不要・A43教訓と整合）。
+    // 繰越が失敗しても一覧表示は止めない（副作用なので握りつぶす）。
+    try{ await fetch("/api/rollover"); }catch(e){ /* 繰越失敗は無視して続行 */ }
     const r = await fetch("/api/task-list");
     const d = await r.json();
     if(!d.ok){ $("#list").innerHTML = `<div class="loading">取得失敗：${d.error||""}</div>`; return; }
