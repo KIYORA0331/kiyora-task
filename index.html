@@ -51,6 +51,9 @@
   .btn-primary{background:linear-gradient(100deg,var(--navy),var(--navy-deep));color:#fff;padding:13px 22px;font-size:15px;width:100%}
   .btn-primary:hover{filter:brightness(1.08)}
   .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  .btn-repeat{background:linear-gradient(100deg,#3a6b2a,#2a4d1e);color:#fff;padding:13px 22px;font-size:15px;width:100%;margin-top:8px}
+  .btn-repeat:hover{filter:brightness(1.08)}
+  .btn-repeat:disabled{opacity:.5;cursor:not-allowed}
   .parsed{border:1px dashed var(--gold);background:linear-gradient(0deg,rgba(201,162,75,.05),rgba(201,162,75,.05));border-radius:10px;padding:14px 16px;margin-top:4px}
   .parsed-head{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px;letter-spacing:.04em}
   .parsed-head .tag{font-style:italic;font-weight:400;color:var(--muted)}
@@ -60,6 +63,7 @@
   .chk{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);font-weight:400;cursor:pointer}
   .chk input{width:17px;height:17px;accent-color:var(--navy)}
   .note{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .repeat-info{font-size:11.5px;color:var(--ok);margin-top:6px;font-weight:500}
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;
     background:var(--navy);color:#fff;padding:12px 20px;border-radius:8px;font-size:13.5px;
     box-shadow:0 8px 24px rgba(22,42,77,.25);transition:.25s;pointer-events:none;border-left:3px solid var(--gold);max-width:90vw}
@@ -67,6 +71,10 @@
   .toast.err{background:var(--crit);border-left-color:#fff}
   .divider{height:1px;background:var(--line);margin:18px 0}
   .footer{text-align:center;font-size:11px;color:var(--muted);font-style:italic;margin-top:24px}
+  .repeat-box{background:#f0f7ed;border:1px solid #b8d9b0;border-radius:10px;padding:14px 16px;margin-top:12px}
+  .repeat-box label{color:#2a5a1e}
+  .repeat-box select,
+  .repeat-box input[type=text]{background:#fff}
 </style>
 </head>
 <body>
@@ -125,9 +133,14 @@
             </select>
           </div>
           <div class="field">
-            <label>タスク種別</label>
+            <label>作業種別</label>
             <select id="taskType">
-              <option selected>やること</option><option>やるべきこと</option><option>やらないこと</option>
+              <option selected>外部連絡</option>
+              <option>書類作成</option>
+              <option>調査検討</option>
+              <option>実作業</option>
+              <option>内部MTG</option>
+              <option>申請手続き</option>
             </select>
           </div>
           <div class="field">
@@ -143,6 +156,41 @@
         </div>
 
         <div class="divider"></div>
+
+        <!-- 繰り返し設定 -->
+        <div class="repeat-box">
+          <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="repeatToggle" /> 定期タスクとして繰り返し登録する</label>
+          <div id="repeatFields" style="display:none">
+            <div class="grid2">
+              <div class="field">
+                <label>繰り返し間隔</label>
+                <select id="repeatInterval">
+                  <option value="7">毎週</option>
+                  <option value="14">隔週</option>
+                  <option value="30">毎月（約30日）</option>
+                  <option value="custom">カスタム（日数指定）</option>
+                </select>
+              </div>
+              <div class="field" id="customDaysField" style="display:none">
+                <label>日数</label>
+                <input type="text" id="customDays" placeholder="例：10" />
+              </div>
+              <div class="field">
+                <label>繰り返し回数</label>
+                <select id="repeatCount">
+                  <option value="2">2回</option>
+                  <option value="3">3回</option>
+                  <option value="4">4回</option>
+                  <option value="6">6回</option>
+                  <option value="12">12回</option>
+                </select>
+              </div>
+            </div>
+            <p class="repeat-info" id="repeatPreview"></p>
+          </div>
+        </div>
+
+        <div class="divider"></div>
         <button class="btn btn-primary" id="submitBtn">タスクを登録</button>
         <p class="note">登録すると到達度0%・ステータス「未着手」で作られます。進捗はダッシュボードから更新します。</p>
       </div>
@@ -154,11 +202,9 @@
   <div id="toast" class="toast"></div>
 
 <script type="module">
-  // ---- 日付パーサ：chrono-node（日本語）を試み、失敗時は簡易フォールバック ----
+  // ---- 日付パーサ ----
   let chrono = null;
-  try {
-    chrono = await import("https://esm.sh/chrono-node@2.7.4");
-  } catch (e) { chrono = null; }
+  try { chrono = await import("https://esm.sh/chrono-node@2.7.4"); } catch (e) { chrono = null; }
 
   const pad = (n)=>String(n).padStart(2,"0");
   const toISO = (d)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -177,18 +223,14 @@
   }
 
   function parseDue(text){
-    // 緊急ワードは最優先で本日
     if(/至急|今日中|ASAP/i.test(text)) return toISO(new Date());
     if(chrono && chrono.ja){
-      try{
-        const d = chrono.ja.parseDate(text, new Date(), { forwardDate:true });
-        if(d) return toISO(d);
-      }catch(e){}
+      try{ const d = chrono.ja.parseDate(text, new Date(), { forwardDate:true }); if(d) return toISO(d); }catch(e){}
     }
     return fallbackDate(text);
   }
 
-  // ---- 辞書（ひっしー確認済み叩き台） ----
+  // ---- 辞書 ----
   const MEMBER = [
     { re:/ひっしー|菱沼|翼|代表/, name:"菱沼翼" },
     { re:/松田|萌華|もえか|ＰＭ|PM/, name:"松田萌華" },
@@ -208,13 +250,41 @@
     return "中";
   }
   function firstMatch(list, text){ for(const x of list){ if(x.re.test(text)) return x.name; } return ""; }
-
-  function deriveTitle(text){
-    const line = (text.split(/\n/)[0] || text).trim();
-    return line.length > 40 ? line.slice(0,40)+"…" : line;
-  }
+  function deriveTitle(text){ const line = (text.split(/\n/)[0] || text).trim(); return line.length > 40 ? line.slice(0,40)+"…" : line; }
 
   const $ = (id)=>document.getElementById(id);
+
+  // ---- 繰り返し設定 ----
+  $("repeatToggle").addEventListener("change", ()=>{
+    $("repeatFields").style.display = $("repeatToggle").checked ? "block" : "none";
+    updateRepeatPreview();
+  });
+  $("repeatInterval").addEventListener("change", ()=>{
+    $("customDaysField").style.display = $("repeatInterval").value === "custom" ? "block" : "none";
+    updateRepeatPreview();
+  });
+  $("repeatCount").addEventListener("change", updateRepeatPreview);
+  $("customDays").addEventListener("input", updateRepeatPreview);
+
+  function getIntervalDays(){
+    const v = $("repeatInterval").value;
+    if(v === "custom"){ const d = parseInt($("customDays").value); return isNaN(d) ? null : d; }
+    return parseInt(v);
+  }
+
+  function updateRepeatPreview(){
+    if(!$("repeatToggle").checked){ $("repeatPreview").textContent=""; return; }
+    const base = $("due").value;
+    const days = getIntervalDays();
+    const count = parseInt($("repeatCount").value);
+    if(!base || !days || !count){ $("repeatPreview").textContent="期限を設定すると次回以降の日程が表示されます"; return; }
+    const dates = [];
+    for(let i=1;i<=count;i++){
+      const d = new Date(base+"T00:00:00"); d.setDate(d.getDate()+days*i);
+      dates.push(toISO(d));
+    }
+    $("repeatPreview").textContent = `登録予定：${base}（初回）→ ${dates.join(" → ")}`;
+  }
 
   $("parseBtn").addEventListener("click", ()=>{
     const text = $("freeText").value.trim();
@@ -226,34 +296,61 @@
     $("due").value        = parseDue(text);
     $("parsedBox").style.display = "block";
     $("parsedBox").scrollIntoView({behavior:"smooth", block:"nearest"});
+    updateRepeatPreview();
   });
+
+  async function registerOne(payload){
+    const r = await fetch("/api/task-create", {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
+    });
+    return r.json();
+  }
 
   $("submitBtn").addEventListener("click", async ()=>{
     const name = $("taskName").value.trim();
     if(!name){ toast("タスク名を入力してください", true); return; }
-    const payload = {
+    const basePayload = {
       taskName: name,
       assignee: $("assignee").value || null,
       proposer: $("proposer").value || null,
       what: $("freeText").value.trim(),
       original: $("freeText").value.trim(),
-      due: $("due").value.trim() || null,
       taskType: $("taskType").value,
       linkedGoal: $("linkedGoal").value || null,
       weight: $("weight").value,
       delegatable: $("delegatable").checked,
     };
+
+    const isRepeat = $("repeatToggle").checked;
+    const baseDue = $("due").value.trim() || null;
+    const days = getIntervalDays();
+    const count = parseInt($("repeatCount").value);
+
     const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "登録中…";
     try{
-      const r = await fetch("/api/task-create", {
-        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
-      });
-      const data = await r.json();
-      if(data.ok){
-        toast("登録しました");
-        $("freeText").value=""; $("parsedBox").style.display="none";
-      }else{
-        toast("登録失敗：" + (data.error||"不明なエラー"), true);
+      if(!isRepeat){
+        // 通常登録（1件）
+        const data = await registerOne({...basePayload, due: baseDue});
+        if(data.ok){ toast("登録しました"); $("freeText").value=""; $("parsedBox").style.display="none"; }
+        else { toast("登録失敗：" + (data.error||"不明なエラー"), true); }
+      } else {
+        // 繰り返し登録
+        if(!baseDue){ toast("繰り返し登録には期限の設定が必要です", true); return; }
+        if(!days){ toast("繰り返し間隔を正しく設定してください", true); return; }
+        const dates = [baseDue];
+        for(let i=1;i<count;i++){
+          const d = new Date(baseDue+"T00:00:00"); d.setDate(d.getDate()+days*i);
+          dates.push(toISO(d));
+        }
+        let ok=0, fail=0;
+        for(let i=0; i<dates.length; i++){
+          const label = count > 1 ? `（${i+1}/${dates.length}）` : "";
+          btn.textContent = `登録中${label}…`;
+          const data = await registerOne({...basePayload, due: dates[i], taskName: name+(count>1?` [${i+1}回目]`:"")});
+          if(data.ok) ok++; else fail++;
+        }
+        if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("parsedBox").style.display="none"; }
+        else { toast(`${ok}件成功・${fail}件失敗`, fail>0); }
       }
     }catch(e){ toast("通信エラー：" + e.message, true); }
     finally{ btn.disabled=false; btn.textContent="タスクを登録"; }
@@ -266,6 +363,9 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(()=>{ t.className = "toast" + (isErr?" err":""); }, 3200);
   }
+
+  // 初期プレビュー
+  $("due") && $("due").addEventListener("input", updateRepeatPreview);
 </script>
 </body>
 </html>

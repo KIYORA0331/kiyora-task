@@ -20,7 +20,7 @@
   .topbar .conf{margin-left:auto;font-size:11px;border:1px solid var(--crit);background:rgba(163,32,32,.25);padding:3px 9px;border-radius:3px}
   .topbar a{color:#fff;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:6px}
   .wrap{max-width:920px;margin:24px auto 0;padding:0 18px}
-  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
   .mcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
   .mcard .l{font-size:12px;color:var(--muted)}
   .mcard .v{font-size:24px;font-weight:700;color:var(--navy)}
@@ -31,6 +31,7 @@
   select{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:#fcfdff;color:var(--ink)}
   .list{display:flex;flex-direction:column;gap:8px;margin-bottom:28px}
   .task{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:0 10px 10px 0;padding:11px 14px}
+  .task.done{opacity:.7;border-left-color:#1D9E75}
   .task .row1{display:flex;align-items:center;gap:8px}
   .task .nm{font-size:14px;font-weight:500}
   .tag{font-size:10.5px;border-radius:3px;padding:1px 6px;border:1px solid currentColor}
@@ -66,6 +67,17 @@
   textarea{width:100%;min-height:58px;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fcfdff}
   .muted{color:var(--muted);font-size:12px}
   .loading{text-align:center;padding:40px;color:var(--muted)}
+  /* 完了セクション */
+  .done-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;padding:10px 0;margin-bottom:8px;border-top:1px solid var(--line)}
+  .done-toggle .t{font-size:15px;font-weight:700;color:var(--muted)}
+  .done-toggle .cnt{font-size:12px;color:var(--muted)}
+  .done-toggle .arr{font-size:14px;color:var(--muted);transition:.2s}
+  .done-toggle.open .arr{transform:rotate(90deg)}
+  .done-list{display:none;flex-direction:column;gap:8px;margin-bottom:28px}
+  .done-list.open{display:flex}
+  .done-task{background:var(--card);border:1px solid var(--line);border-left:4px solid #1D9E75;border-radius:0 10px 10px 0;padding:10px 14px;opacity:.75}
+  .done-task .nm{font-size:13.5px;font-weight:500;color:var(--muted);text-decoration:line-through}
+  .done-task .meta{font-size:11.5px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -96,6 +108,14 @@
     <div class="legend" id="legend"></div>
     <div class="cal-head"><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div><div class="dow">日</div></div>
     <div class="cal" id="cal"></div>
+
+    <!-- 完了タスクセクション -->
+    <div class="done-toggle" id="doneToggle">
+      <span class="arr">▶</span>
+      <span class="t">完了済みタスク</span>
+      <span class="cnt" id="doneCnt"></span>
+    </div>
+    <div class="done-list" id="doneList"></div>
   </div>
 
   <div class="ov" id="ov">
@@ -108,7 +128,9 @@
 
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <label class="muted">種別</label>
-        <select id="mType"><option>書類作成</option><option selected>外部連絡</option><option>調査・検討</option><option>実作業</option><option>カスタム</option></select>
+        <select id="mType">
+          <option>外部連絡</option><option>書類作成</option><option>調査・検討</option><option>実作業</option><option>内部MTG</option><option>申請手続き</option>
+        </select>
         <span class="muted" style="margin-left:auto">ぴったり無ければ少し手前（下）を</span>
       </div>
 
@@ -140,11 +162,12 @@
 
 <script>
 const LADDER = {
-  "書類作成":["まだ手をつけてない","構成・骨子を考えた","たたき台を書き始めた","半分書けた","ほぼ書けた","見直し・確認中","完成・提出した"],
   "外部連絡":["まだ手をつけてない","内容を確認した","下書きを始めた","半分くらい書けた","ほぼ書き終えた","確認待ち・送る直前","送信した・完了"],
+  "書類作成":["まだ手をつけてない","構成・骨子を考えた","たたき台を書き始めた","半分書けた","ほぼ書けた","見直し・確認中","完成・提出した"],
   "調査・検討":["まだ手をつけてない","論点を洗い出した","情報を集め始めた","材料が半分揃った","ほぼ揃った","結論が見えてきた","結論を出した・まとめた"],
   "実作業":["まだ手をつけてない","段取りを確認した","始めた","半分終わった","ほぼ終わった","残り少し・最終確認","完了した"],
-  "カスタム":["0%","少し進んだ","着手した","半分","ほぼ","もう少し","完了"],
+  "内部MTG":["まだ手をつけてない","アジェンダを確認した","準備中","参加済み・メモ整理中","議事録まとめ中","共有済み","完了した"],
+  "申請手続き":["まだ手をつけてない","必要書類を確認した","書類を集め始めた","書類が半分揃った","ほぼ揃った","提出直前・確認中","提出した・完了"],
 };
 const PCTS = [0,15,30,50,70,85,100];
 const memberColor = {"菱沼翼":"#185FA5","松田萌華":"#1D9E75","林優作":"#BA7517"};
@@ -152,8 +175,9 @@ const goalColor = {"OEM契約":"#534AB7","100病院":"#185FA5","海外商談":"#
 const statusColor = {"未着手":"#888780","進行中":"#185FA5","完了":"#1D9E75","繰越":"#BA7517","ブロック":"#A32D2D","取下げ":"#5F5E5A"};
 
 let TASKS = [];
-let active = null;     // 更新対象タスク
-let selStep = null;    // 選択中の段階index
+let COMPLETED = [];
+let active = null;
+let selStep = null;
 
 const $ = (s)=>document.querySelector(s);
 const fmtDay = (iso)=> iso ? `${(+iso.slice(5,7))}/${(+iso.slice(8,10))}` : "期限なし";
@@ -167,13 +191,12 @@ function nearestStep(p){ let bi=0,bd=999; PCTS.forEach((v,i)=>{const d=Math.abs(
 
 async function load(){
   try{
-    // 表示時に1回だけ翌日繰越を実行（cron不要・A43教訓と整合）。
-    // 繰越が失敗しても一覧表示は止めない（副作用なので握りつぶす）。
-    try{ await fetch("/api/rollover"); }catch(e){ /* 繰越失敗は無視して続行 */ }
+    try{ await fetch("/api/rollover"); }catch(e){}
     const r = await fetch("/api/task-list");
     const d = await r.json();
     if(!d.ok){ $("#list").innerHTML = `<div class="loading">取得失敗：${d.error||""}</div>`; return; }
     TASKS = d.tasks||[];
+    COMPLETED = d.completed||[];
     renderAll();
   }catch(e){ $("#list").innerHTML = `<div class="loading">通信エラー：${e.message}</div>`; }
 }
@@ -184,11 +207,13 @@ function renderCards(){
   const prog = TASKS.filter(t=>t.status==="進行中").length;
   const stuck = TASKS.filter(t=>t.status==="繰越"||t.status==="ブロック").length;
   const dele = TASKS.filter(t=>t.delegatable).length;
+  const done = COMPLETED.length;
   $("#cards").innerHTML = `
     <div class="mcard"><div class="l">今日のタスク</div><div class="v">${todayN}</div></div>
     <div class="mcard"><div class="l">進行中</div><div class="v">${prog}</div></div>
     <div class="mcard"><div class="l">繰越・滞留</div><div class="v" style="color:var(--crit)">${stuck}</div></div>
-    <div class="mcard"><div class="l">委譲募集中</div><div class="v" style="color:var(--warn)">${dele}</div></div>`;
+    <div class="mcard"><div class="l">委譲募集中</div><div class="v" style="color:var(--warn)">${dele}</div></div>
+    <div class="mcard"><div class="l">完了済み</div><div class="v" style="color:var(--ok)">${done}</div></div>`;
 }
 
 function renderList(){
@@ -211,6 +236,21 @@ function renderList(){
       </div>
     </div>`;
   }).join("") || `<div class="loading">該当タスクなし</div>`;
+}
+
+function renderDone(){
+  const f = $("#memberFilter").value;
+  const list = COMPLETED.filter(t=> f==="all"||t.member===f);
+  $("#doneCnt").textContent = `${list.length}件`;
+  $("#doneList").innerHTML = list.map(t=>{
+    const due = t.due ? fmtDay(t.due) : "期限なし";
+    return `<div class="done-task">
+      <div class="row1" style="display:flex;align-items:center;gap:8px">
+        <span class="nm">${esc(t.name)}</span>
+        <span class="meta" style="margin-left:auto">${t.member||"未設定"}・${due}</span>
+      </div>
+    </div>`;
+  }).join("") || `<div class="loading" style="padding:16px">完了済みタスクなし</div>`;
 }
 
 function renderLegend(){
@@ -238,10 +278,19 @@ function renderCal(){
   $("#cal").innerHTML = cells;
 }
 
-function renderAll(){ renderCards(); renderList(); renderLegend(); renderCal(); }
+function renderAll(){ renderCards(); renderList(); renderDone(); renderLegend(); renderCal(); }
+
+// 完了セクションの開閉
+document.getElementById("doneToggle").addEventListener("click", ()=>{
+  const tog = document.getElementById("doneToggle");
+  const lst = document.getElementById("doneList");
+  tog.classList.toggle("open");
+  lst.classList.toggle("open");
+});
 
 function renderSteps(){
-  const type = $("#mType").value, labels = LADDER[type];
+  const type = $("#mType").value;
+  const labels = LADDER[type] || LADDER["外部連絡"];
   const curIdx = nearestStep(active.current);
   $("#mSteps").innerHTML = labels.map((lab,i)=>{
     const filled = i<=(selStep!==null?selStep:curIdx);
@@ -267,7 +316,9 @@ function openModal(idx){
   $("#mMeta").textContent = `担当：${active.member||"未設定"}　現在 ${active.current||0}%　${active.status}`;
   $("#mStatus").value = active.status||"進行中";
   $("#mMemo").value = "";
-  $("#mType").value = "外部連絡";
+  // 登録時の作業種別を反映（なければデフォルト）
+  const typeMap = {"外部連絡":"外部連絡","書類作成":"書類作成","調査検討":"調査・検討","実作業":"実作業","内部MTG":"内部MTG","申請手続き":"申請手続き"};
+  $("#mType").value = typeMap[active.type] || "外部連絡";
   toggleBlock();
   renderSteps();
   $("#ov").classList.add("on");
