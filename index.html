@@ -28,6 +28,8 @@
   .topbar a.navlink{margin-left:auto;align-self:center;color:#fff;font-size:12px;text-decoration:none;
     border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:6px}
   .topbar a.navlink:hover{background:rgba(255,255,255,.12)}
+  .topbar .back{font:inherit;align-self:center;font-size:12px;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.45);padding:5px 12px;border-radius:6px;cursor:pointer}
+  .topbar .back:hover{background:rgba(255,255,255,.22)}
   .topbar .conf{font-size:11px;color:#fff;border:1px solid var(--crit);
     background:rgba(163,32,32,.22);padding:3px 9px;border-radius:3px;letter-spacing:.06em}
   .wrap{max-width:680px;margin:28px auto 0;padding:0 18px}
@@ -87,6 +89,7 @@
 </head>
 <body>
   <div class="topbar">
+    <button class="back" id="backBtn">‹ 戻る</button>
     <span class="brand">KIYORA</span>
     <span class="sub">業務タスク登録</span>
     <a href="/dashboard.html" class="navlink">ダッシュボードを見る</a>
@@ -290,6 +293,9 @@
     el.addEventListener("click", ()=>{ selPrio = Number(el.dataset.v); renderPrio(); });
   });
   renderPrio();
+
+  // ---- 戻るボタン ----
+  $("backBtn").addEventListener("click", ()=>{ if(history.length>1){ history.back(); } else { location.href="https://kiyora-hr.vercel.app/"; } });
 
   // ---- 参加者（複数選択）----
   let selParts = new Set();

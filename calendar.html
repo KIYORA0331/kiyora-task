@@ -12,6 +12,8 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Yu Gothic","ヒラギノ角ゴ Pro",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
   .topbar{background:linear-gradient(180deg,var(--navy),#162a4d);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--gold)}
+  .topbar .back{font:inherit;font-size:12px;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.45);border-radius:7px;padding:6px 12px;cursor:pointer}
+  .topbar .back:hover{background:rgba(255,255,255,.22)}
   .topbar .logo{font-weight:800;letter-spacing:.12em}
   .topbar .t{font-size:13px;opacity:.9}
   .topbar a{margin-left:auto;color:#fff;text-decoration:none;font-size:12px;border:1px solid rgba(255,255,255,.5);border-radius:7px;padding:6px 12px}
@@ -79,6 +81,7 @@
 </head>
 <body>
   <div class="topbar">
+    <button class="back" onclick="goBack()">‹ 戻る</button>
     <span class="logo">KIYORA</span>
     <span class="t">統合カレンダー（タスク＋予定）</span>
     <a href="https://kiyora-task.vercel.app/dashboard.html" target="_blank" rel="noopener">タスク管理へ</a>
@@ -95,6 +98,14 @@
         </div>
       </div>
       <div class="legend" id="legend"></div>
+
+      <div class="viewsw" id="memberFilter" style="margin:4px 0 2px">
+        <span class="muted" style="align-self:center;margin-right:2px">メンバー</span>
+        <button class="f-chip on" data-m="all">全員</button>
+        <button class="f-chip" data-m="菱沼翼">菱沼翼</button>
+        <button class="f-chip" data-m="松田萌華">松田萌華</button>
+        <button class="f-chip" data-m="林優作">林優作</button>
+      </div>
 
       <div class="viewsw">
         <button class="f-chip on" id="vMonth">月</button>
@@ -137,6 +148,11 @@ let viewM = new Date().getMonth();
 let showTask = true, showEvent = true;
 let view = "month";
 let anchor = new Date();
+let memberSel = new Set();
+
+function goBack(){ if(history.length>1){ history.back(); } else { location.href="https://kiyora-hr.vercel.app/"; } }
+const memberPassTask = (t)=> memberSel.size===0 || memberSel.has(t.member);
+const memberPassEvent = (e)=> memberSel.size===0 || (e.participants||[]).some(p=>memberSel.has(p));
 
 const memberColor = {"菱沼翼":"#185FA5","松田萌華":"#1D9E75","林優作":"#BA7517"};
 const colorOf = (m)=> memberColor[m] || "#888780";
@@ -155,8 +171,8 @@ function renderLegend(){
 
 function itemsOn(iso){
   const items = [];
-  if(showTask) TASKS.filter(t=> dpart(t.due)===iso).forEach(t=> items.push({kind:"task", obj:t}));
-  if(showEvent) EVENTS.filter(e=> dpart(e.datetime)===iso).forEach(e=> items.push({kind:"event", obj:e}));
+  if(showTask) TASKS.filter(t=> dpart(t.due)===iso && memberPassTask(t)).forEach(t=> items.push({kind:"task", obj:t}));
+  if(showEvent) EVENTS.filter(e=> dpart(e.datetime)===iso && memberPassEvent(e)).forEach(e=> items.push({kind:"event", obj:e}));
   return items;
 }
 
@@ -292,6 +308,23 @@ $("#vWeek").addEventListener("click", ()=> setView("week"));
 $("#vDay3").addEventListener("click", ()=> setView("day3"));
 $("#fTask").addEventListener("click", ()=>{ showTask=!showTask; $("#fTask").classList.toggle("on",showTask); closeDay(); render(); });
 $("#fEvent").addEventListener("click", ()=>{ showEvent=!showEvent; $("#fEvent").classList.toggle("on",showEvent); closeDay(); render(); });
+
+function renderMemberChips(){
+  document.querySelectorAll("#memberFilter .f-chip").forEach(b=>{
+    const m=b.dataset.m;
+    b.classList.toggle("on", m==="all" ? memberSel.size===0 : memberSel.has(m));
+  });
+}
+document.querySelectorAll("#memberFilter .f-chip").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    const m=b.dataset.m;
+    if(m==="all") memberSel.clear();
+    else if(memberSel.has(m)) memberSel.delete(m);
+    else memberSel.add(m);
+    renderMemberChips(); closeDay(); render();
+  });
+});
+renderMemberChips();
 $("#dayClose").addEventListener("click", closeDay);
 $("#dayOv").addEventListener("click",(e)=>{ if(e.target.id==="dayOv") closeDay(); });
 
