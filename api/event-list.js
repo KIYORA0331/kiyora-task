@@ -1,48 +1,56 @@
-// KIYORA 業務タスク管理 / 予定一覧取得API
-// 予定DB（定例MTG・商談など）を返す。統合カレンダーの「予定」側データ。
-// タスクDBとは完全分離。タスク取得（task-list）と同じ方式。
+// KIYORA 業務タスク管理 / 予定一覧取得API（Googleカレンダー版）
+// GoogleカレンダーのiCal(ics)を読み、繰り返し予定も展開して返す。
+// 予定はGoogleカレンダー（Notion Calendar）で管理。NotionのタスクDBとは別系統。
+// 機密：iCalの非公開URLはコードに書かず、環境変数 GCAL_ICS_URL に置く。
 
-const NOTION_TOKEN = process.env.NOTION_TOKEN;
-const EVENT_DB_ID = "b4e09709-fd53-48bb-b9cf-d9edb3347f1c";
-const NOTION_VERSION = "2022-06-28";
+import IcalExpander from "ical-expander";
 
-const txt = (p) => (p && p.rich_text && p.rich_text[0]) ? p.rich_text[0].plain_text : "";
-const sel = (p) => (p && p.select) ? p.select.name : "";
-const dat = (p) => (p && p.date) ? p.date.start : null;
+const ICS_URL = process.env.GCAL_ICS_URL;
+const pad = (n) => String(n).padStart(2, "0");
 
-function mapEvent(pg) {
-  const p = pg.properties;
+function formatJST(jsd) {
+  const j = new Date(jsd.getTime() + 9 * 3600 * 1000);
+  return `${j.getUTCFullYear()}-${pad(j.getUTCMonth() + 1)}-${pad(j.getUTCDate())}T${pad(j.getUTCHours())}:${pad(j.getUTCMinutes())}:00+09:00`;
+}
+
+function toDatetime(t) {
+  // t: ICAL.Time。終日は日付のみ、時刻ありはJSTのISO。
+  if (t.isDate) return `${t.year}-${pad(t.month)}-${pad(t.day)}`;
+  return formatJST(t.toJSDate());
+}
+
+function mapItem(item, startDate, uid) {
   return {
-    id: pg.id,
-    name: (p["予定名"] && p["予定名"].title && p["予定名"].title[0]) ? p["予定名"].title[0].plain_text : "(無題)",
-    datetime: dat(p["日時"]),
-    type: sel(p["種別"]),
-    place: txt(p["場所"]),
-    memo: txt(p["メモ"]),
-    participants: (p["参加者"] && p["参加者"].multi_select) ? p["参加者"].multi_select.map(o => o.name) : [],
+    id: (uid || "") + "_" + (startDate ? startDate.toString() : ""),
+    name: item.summary || "(無題)",
+    datetime: toDatetime(startDate),
+    type: "",            // Googleカレンダーには種別欄がないため空
+    place: item.location || "",
+    participants: [],     // 個別メンバーの紐付けは持たない（全員表示で見える）
   };
 }
 
 export default async function handler(req, res) {
-  if (!NOTION_TOKEN) {
-    return res.status(500).json({ ok: false, error: "NOTION_TOKEN 未設定" });
+  if (!ICS_URL) {
+    return res.status(500).json({ ok: false, error: "GCAL_ICS_URL 未設定（Googleカレンダーの非公開iCalアドレスを環境変数に登録してください）" });
   }
   try {
-    const resp = await fetch(`https://api.notion.com/v1/databases/${EVENT_DB_ID}/query`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${NOTION_TOKEN}`,
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_VERSION,
-      },
-      body: JSON.stringify({
-        sorts: [{ property: "日時", direction: "ascending" }],
-        page_size: 100,
-      }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.message || "Notion query error");
-    const events = (data.results || []).map(mapEvent).filter(e => e.datetime);
+    const r = await fetch(ICS_URL);
+    if (!r.ok) throw new Error("iCal取得失敗 HTTP " + r.status);
+    const ics = await r.text();
+
+    const now = new Date();
+    const after = new Date(now.getTime() - 31 * 24 * 3600 * 1000);    // 過去31日
+    const before = new Date(now.getTime() + 180 * 24 * 3600 * 1000);  // 先180日
+
+    const expander = new IcalExpander({ ics, maxIterations: 2000 });
+    const result = expander.between(after, before);
+
+    const events = [];
+    result.events.forEach((e) => events.push(mapItem(e, e.startDate, e.uid)));
+    result.occurrences.forEach((o) => events.push(mapItem(o.item, o.startDate, o.item.uid)));
+    events.sort((a, b) => (a.datetime < b.datetime ? -1 : a.datetime > b.datetime ? 1 : 0));
+
     return res.status(200).json({ ok: true, count: events.length, events });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
