@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KIYORA 統合カレンダー</title>
+<style>
+  :root{
+    --navy:#1F3864; --gold:#C9A24B; --ink:#1c2230; --muted:#5c6679;
+    --line:#d9dee7; --bg:#f4f6fa; --card:#ffffff; --crit:#A32D2D;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Yu Gothic","ヒラギノ角ゴ Pro",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+  .topbar{background:linear-gradient(180deg,var(--navy),#162a4d);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--gold)}
+  .topbar .logo{font-weight:800;letter-spacing:.12em}
+  .topbar .t{font-size:13px;opacity:.9}
+  .topbar a{margin-left:auto;color:#fff;text-decoration:none;font-size:12px;border:1px solid rgba(255,255,255,.5);border-radius:7px;padding:6px 12px}
+  .topbar a:hover{background:rgba(255,255,255,.12)}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 16px 20px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .head .ttl{font-size:17px;font-weight:700;color:var(--navy)}
+  .head .sub{font-size:12px;color:var(--muted)}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 4px;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .sw.ev{background:#fff;border:1.5px solid var(--gold)}
+  .filter{display:inline-flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .f-chip{font:inherit;font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:20px;background:#fff;color:var(--muted);cursor:pointer;transition:.12s}
+  .f-chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .cal-nav{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0}
+  .cal-nav .m{font-size:14px;font-weight:700;color:var(--navy);min-width:128px;text-align:center}
+  .btn{font:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--ink)}
+  .btn:hover{border-color:var(--navy)}
+  .btn.nav{font-size:18px;line-height:1;padding:4px 16px}
+  .cal-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+  .dow{font-size:11px;color:var(--muted);text-align:center;padding:2px 0}
+  .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-auto-rows:118px;gap:5px;margin-top:4px}
+  .cell{height:118px;overflow:hidden;border:1px solid var(--line);border-radius:7px;padding:5px;background:var(--card);transition:.12s}
+  .cell.empty{background:transparent;border-color:transparent}
+  .cell.has{cursor:pointer}
+  .cell.has:hover{border-color:var(--navy);box-shadow:0 2px 8px rgba(31,56,100,.12)}
+  .cell.today{border-color:var(--navy);background:rgba(31,56,100,.05)}
+  .dn{font-size:11px;color:var(--muted);font-weight:500}
+  .chip{display:block;max-width:100%;font-size:10.5px;border-radius:3px;padding:2px 5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip.task{color:#fff}
+  .chip.event{background:#fff;border:1.5px solid var(--gold);color:var(--navy);font-weight:600}
+  .chip-more{font-size:10px;color:var(--navy);font-weight:600;margin-top:3px;padding:1px 4px}
+  /* ビュー切替・週/3日（範囲）表示 */
+  .viewsw{display:inline-flex;gap:6px;margin:6px 0 2px}
+  .range{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+  .range-day{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .range-day.today{border-color:var(--navy);box-shadow:0 0 0 1px var(--navy) inset}
+  .range-head{background:var(--bg);padding:8px 12px;font-size:13px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:6px}
+  .range-head .cnt{margin-left:auto;font-size:11px;font-weight:500;color:var(--muted)}
+  .range-body{padding:10px 12px}
+  .range-body .none{color:var(--muted);font-size:12px}
+  .range-body .day-item{margin-bottom:8px}
+  .range-body .day-item:last-child{margin-bottom:0}
+  /* 日別モーダル */
+  .ov{position:fixed;inset:0;background:rgba(20,28,46,.5);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;z-index:50}
+  .ov.on{display:flex}
+  .modal{background:var(--card);border-radius:14px;width:100%;max-width:540px;padding:20px}
+  .modal h3{font-size:16px;color:var(--navy)}
+  .day-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px;background:#fff}
+  .day-item .ci{width:11px;height:11px;border-radius:50%;flex-shrink:0;margin-top:3px}
+  .day-item.event{border-left:3px solid var(--gold)}
+  .day-item .ci.ev{background:#fff;border:1.5px solid var(--gold);border-radius:3px}
+  .day-item .di{flex:1;min-width:0}
+  .day-item .nm{font-size:13.5px;font-weight:600;line-height:1.45}
+  .day-item .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .day-item .badge{display:inline-block;font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-right:6px}
+  .badge.task{background:rgba(31,56,100,.1);color:var(--navy)}
+  .badge.event{background:rgba(201,162,75,.18);color:#8a6d1f}
+  .muted{color:var(--muted);font-size:12px}
+  .loading{text-align:center;color:var(--muted);padding:30px;font-size:13px}
+  .err{background:#fde8e8;color:var(--crit);border-radius:8px;padding:12px;font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="logo">KIYORA</span>
+    <span class="t">統合カレンダー（タスク＋予定）</span>
+    <a href="https://kiyora-task.vercel.app/dashboard.html" target="_blank" rel="noopener">タスク管理へ</a>
+  </div>
+
+  <div class="wrap">
+    <div class="panel">
+      <div class="head">
+        <span class="ttl">カレンダー</span>
+        <span class="sub">日付をクリックでその日の詳細</span>
+        <div class="filter">
+          <button class="f-chip on" id="fTask">タスク</button>
+          <button class="f-chip on" id="fEvent">予定</button>
+        </div>
+      </div>
+      <div class="legend" id="legend"></div>
+
+      <div class="viewsw">
+        <button class="f-chip on" id="vMonth">月</button>
+        <button class="f-chip" id="vWeek">週</button>
+        <button class="f-chip" id="vDay3">3日</button>
+      </div>
+
+      <div class="cal-nav">
+        <button class="btn nav" id="prevBtn" aria-label="前へ">‹</button>
+        <span class="m" id="periodLabel">----</span>
+        <button class="btn nav" id="nextBtn" aria-label="次へ">›</button>
+        <button class="btn" id="todayBtn" style="font-size:12px;margin-left:4px">今日</button>
+      </div>
+
+      <div id="monthView">
+        <div class="cal-head"><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div><div class="dow">日</div></div>
+        <div class="cal" id="cal"><div class="loading">読み込み中…</div></div>
+      </div>
+      <div id="rangeView" style="display:none"></div>
+      <div id="errBox"></div>
+    </div>
+  </div>
+
+  <div class="ov" id="dayOv">
+    <div class="modal">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <h3 id="dayTitle">日付</h3>
+        <span style="margin-left:auto;cursor:pointer;color:var(--muted)" id="dayClose">✕</span>
+      </div>
+      <div class="muted" style="margin-bottom:14px" id="daySub"></div>
+      <div id="dayList"></div>
+    </div>
+  </div>
+
+<script>
+const $ = (s)=>document.querySelector(s);
+let TASKS = [], EVENTS = [];
+let viewY = new Date().getFullYear();
+let viewM = new Date().getMonth();
+let showTask = true, showEvent = true;
+let view = "month";
+let anchor = new Date();
+
+const memberColor = {"菱沼翼":"#185FA5","松田萌華":"#1D9E75","林優作":"#BA7517"};
+const colorOf = (m)=> memberColor[m] || "#888780";
+const esc = (s)=> String(s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dpart = (iso)=> (iso||"").slice(0,10);
+const tpart = (iso)=>{ if(!iso||iso.length<=10) return ""; const hm=iso.slice(11,16); return (hm&&hm!=="00:00")?hm:""; };
+
+function todayStr(){ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; }
+
+function renderLegend(){
+  const members = [...new Set(TASKS.map(t=>t.member).filter(Boolean))];
+  let h = members.map(m=>`<span><i class="sw" style="background:${colorOf(m)}"></i>${esc(m)}</span>`).join("");
+  h += `<span><i class="sw ev"></i>予定</span>`;
+  $("#legend").innerHTML = h;
+}
+
+function itemsOn(iso){
+  const items = [];
+  if(showTask) TASKS.filter(t=> dpart(t.due)===iso).forEach(t=> items.push({kind:"task", obj:t}));
+  if(showEvent) EVENTS.filter(e=> dpart(e.datetime)===iso).forEach(e=> items.push({kind:"event", obj:e}));
+  return items;
+}
+
+function renderMonth(){
+  const now = new Date(), y=viewY, m=viewM;
+  $("#periodLabel").textContent = `${y}年${m+1}月`;
+  const first = new Date(y,m,1); const startDow = (first.getDay()+6)%7;
+  const days = new Date(y,m+1,0).getDate();
+  const isThisMonth = (y===now.getFullYear() && m===now.getMonth());
+  const MAX = 3;
+  let cells = "";
+  for(let i=0;i<startDow;i++) cells += `<div class="cell empty"></div>`;
+  for(let d=1; d<=days; d++){
+    const iso = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const isToday = (isThisMonth && d===now.getDate());
+    const items = itemsOn(iso);
+    const chips = items.slice(0,MAX).map(it=>{
+      if(it.kind==="task"){ const c=colorOf(it.obj.member); return `<div class="chip task" style="background:${c}" title="${esc(it.obj.name)}">${esc(it.obj.name)}</div>`; }
+      const tm = tpart(it.obj.datetime); return `<div class="chip event" title="${esc(it.obj.name)}">${tm?tm+" ":""}${esc(it.obj.name)}</div>`;
+    }).join("");
+    const more = items.length>MAX ? `<div class="chip-more">＋${items.length-MAX}件</div>` : "";
+    const has = items.length ? "has" : "empty";
+    const click = items.length ? ` onclick="openDay('${iso}')"` : "";
+    cells += `<div class="cell ${isToday?'today':''} ${has}"${click}><div class="dn" style="${isToday?'color:var(--navy)':''}">${d}</div>${chips}${more}</div>`;
+  }
+  $("#cal").innerHTML = cells;
+}
+
+function itemHTML(it){
+  if(it.kind==="task"){
+    const t=it.obj, c=colorOf(t.member);
+    const parts = t.participants&&t.participants.length?`（＋${t.participants.join("・")}）`:"";
+    return `<div class="day-item">
+      <span class="ci" style="background:${c}"></span>
+      <div class="di">
+        <div class="nm"><span class="badge task">タスク</span>${esc(t.name)}</div>
+        <div class="sub">${esc(t.member||"未設定")}${parts}・${t.status||""}・${t.current||0}%</div>
+      </div>
+    </div>`;
+  }
+  const e=it.obj, tm=tpart(e.datetime);
+  const parts = e.participants&&e.participants.length?`・${e.participants.join("・")}`:"";
+  const meta = [tm, e.type, e.place].filter(Boolean).join("・");
+  return `<div class="day-item event">
+    <span class="ci ev"></span>
+    <div class="di">
+      <div class="nm"><span class="badge event">予定</span>${esc(e.name)}</div>
+      <div class="sub">${esc(meta)}${esc(parts)}</div>
+    </div>
+  </div>`;
+}
+
+function openDay(iso){
+  const items = itemsOn(iso);
+  const [yy,mm,dd] = iso.split("-").map(Number);
+  $("#dayTitle").textContent = `${mm}月${dd}日`;
+  const nt = items.filter(i=>i.kind==="task").length, ne = items.filter(i=>i.kind==="event").length;
+  $("#daySub").textContent = `タスク ${nt}件 ／ 予定 ${ne}件`;
+  $("#dayList").innerHTML = items.map(itemHTML).join("") || `<div class="muted">この日の予定・タスクはありません</div>`;
+  $("#dayOv").classList.add("on");
+}
+function closeDay(){ $("#dayOv").classList.remove("on"); }
+
+// 表示単位のディスパッチ（月／週／3日）
+function render(){
+  if(view==="month"){ $("#monthView").style.display=""; $("#rangeView").style.display="none"; renderMonth(); }
+  else { $("#monthView").style.display="none"; $("#rangeView").style.display=""; renderRange(); }
+}
+function rangeStart(){
+  const d=new Date(anchor); d.setHours(0,0,0,0);
+  if(view==="week"){ const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); } // 週は月曜始まり
+  return d;
+}
+function renderRange(){
+  const n = view==="week" ? 7 : 3;
+  const start = rangeStart();
+  const today = todayStr();
+  const wd = ['日','月','火','水','木','金','土'];
+  const end = new Date(start); end.setDate(end.getDate()+n-1);
+  $("#periodLabel").textContent = `${start.getMonth()+1}/${start.getDate()}〜${end.getMonth()+1}/${end.getDate()}`;
+  let html = "";
+  for(let i=0;i<n;i++){
+    const dt = new Date(start); dt.setDate(dt.getDate()+i);
+    const iso = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+    const items = itemsOn(iso);
+    const isToday = iso===today;
+    const body = items.length ? items.map(itemHTML).join("") : `<div class="none">予定・タスクなし</div>`;
+    html += `<div class="range-day ${isToday?'today':''}">
+      <div class="range-head">${dt.getMonth()+1}/${dt.getDate()}（${wd[dt.getDay()]}）${isToday?' ・今日':''}<span class="cnt">${items.length?items.length+'件':''}</span></div>
+      <div class="range-body">${body}</div>
+    </div>`;
+  }
+  $("#rangeView").innerHTML = html;
+}
+function step(dir){
+  if(view==="month"){ viewM+=dir; if(viewM<0){viewM=11;viewY--;} if(viewM>11){viewM=0;viewY++;} }
+  else { const n=view==="week"?7:3; anchor=new Date(anchor); anchor.setDate(anchor.getDate()+dir*n); }
+  closeDay(); render();
+}
+function setView(v){
+  view=v;
+  $("#vMonth").classList.toggle("on",v==="month");
+  $("#vWeek").classList.toggle("on",v==="week");
+  $("#vDay3").classList.toggle("on",v==="day3");
+  closeDay(); render();
+}
+
+async function load(){
+  try{
+    const [tr, er] = await Promise.all([
+      fetch("/api/task-list").then(r=>r.json()).catch(()=>({ok:false})),
+      fetch("/api/event-list").then(r=>r.json()).catch(()=>({ok:false})),
+    ]);
+    TASKS = (tr && tr.ok && Array.isArray(tr.tasks)) ? tr.tasks.filter(t=>t.due) : [];
+    EVENTS = (er && er.ok && Array.isArray(er.events)) ? er.events : [];
+    let errs = [];
+    if(!tr || !tr.ok) errs.push("タスクの読み込みに失敗しました");
+    if(!er || !er.ok) errs.push("予定の読み込みに失敗しました");
+    $("#errBox").innerHTML = errs.length ? `<div class="err">${errs.join(" / ")}</div>` : "";
+    renderLegend();
+    render();
+  }catch(e){
+    $("#cal").innerHTML = "";
+    $("#errBox").innerHTML = `<div class="err">通信エラー：${esc(e.message)}</div>`;
+  }
+}
+
+$("#prevBtn").addEventListener("click", ()=> step(-1));
+$("#nextBtn").addEventListener("click", ()=> step(1));
+$("#todayBtn").addEventListener("click", ()=>{ const n=new Date(); viewY=n.getFullYear(); viewM=n.getMonth(); anchor=new Date(); closeDay(); render(); });
+$("#vMonth").addEventListener("click", ()=> setView("month"));
+$("#vWeek").addEventListener("click", ()=> setView("week"));
+$("#vDay3").addEventListener("click", ()=> setView("day3"));
+$("#fTask").addEventListener("click", ()=>{ showTask=!showTask; $("#fTask").classList.toggle("on",showTask); closeDay(); render(); });
+$("#fEvent").addEventListener("click", ()=>{ showEvent=!showEvent; $("#fEvent").classList.toggle("on",showEvent); closeDay(); render(); });
+$("#dayClose").addEventListener("click", closeDay);
+$("#dayOv").addEventListener("click",(e)=>{ if(e.target.id==="dayOv") closeDay(); });
+
+load();
+</script>
+</body>
+</html>
