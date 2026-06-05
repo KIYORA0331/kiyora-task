@@ -191,6 +191,16 @@
         <button class="btn" id="mDueClear" style="font-size:11px;padding:5px 10px">クリア</button>
       </div>
 
+      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <label class="muted" style="padding-top:5px">参加者</label>
+        <div class="mfilter" id="mPart">
+          <button class="mf-chip" data-p="菱沼翼">菱沼翼</button>
+          <button class="mf-chip" data-p="松田萌華">松田萌華</button>
+          <button class="mf-chip" data-p="林優作">林優作</button>
+        </div>
+        <span class="muted" style="margin-left:auto;font-size:11px;padding-top:5px">主担当以外で関わる人</span>
+      </div>
+
       <div id="mSteps" style="margin-bottom:14px"></div>
 
       <div class="muted" style="margin-bottom:4px">この回のひとことメモ（任意）</div>
@@ -248,6 +258,7 @@ let COMPLETED = [];
 let active = null;
 let selStep = null;
 let selPrio = 3;
+let selMPart = new Set();
 let memberSel = new Set();
 let viewY = new Date().getFullYear();
 let viewM = new Date().getMonth();
@@ -345,7 +356,7 @@ function renderList(){
         ${isDueToday?`<span class="tag" style="color:var(--warn)">本日締切日</span>`:""}
         ${stuck?`<span class="tag" style="color:var(--crit)">滞留</span>`:""}
         ${t.delegatable?`<span class="tag" style="color:var(--warn)">委譲OK</span>`:""}
-        <span class="meta">${t.member||"未設定"}・${fmtDay(t.due)}</span>
+        <span class="meta">${t.member||"未設定"}${t.participants&&t.participants.length?`（＋${t.participants.join("・")}）`:""}・${fmtDay(t.due)}</span>
       </div>
       <div class="row2">
         <div class="bar"><i style="width:${t.current||0}%;background:${c}"></i></div>
@@ -416,7 +427,7 @@ function openDayModal(iso){
       <span class="ci" style="background:${c}"></span>
       <div class="di">
         <div class="dnm">${esc(t.name)}</div>
-        <div class="dsub">${starsSm(t.priority)} ${t.member||"未設定"}・${t.status}・${t.current||0}%${stuck?" ・滞留":""}</div>
+        <div class="dsub">${starsSm(t.priority)} ${t.member||"未設定"}${t.participants&&t.participants.length?`（＋${t.participants.join("・")}）`:""}・${t.status}・${t.current||0}%${stuck?" ・滞留":""}</div>
       </div>
       <span class="da">›</span>
     </div>`;
@@ -466,6 +477,8 @@ function openModal(idx){
   const due = active.due || "";
   $("#mDueDate").value = due ? due.slice(0,10) : "";
   $("#mDueTime").value = (due.length>10 && due.slice(11,16)!=="00:00") ? due.slice(11,16) : "";
+  selMPart = new Set(active.participants || []);
+  renderMPart();
   $("#mTitle").textContent = active.name;
   $("#mMeta").textContent = `担当：${active.member||"未設定"}　現在 ${active.current||0}%　${active.status}`;
   $("#mStatus").value = active.status||"進行中";
@@ -479,6 +492,9 @@ function openModal(idx){
 }
 function renderMStars(){
   document.querySelectorAll("#mStars .st").forEach(el=> el.classList.toggle("on", Number(el.dataset.v)<=selPrio));
+}
+function renderMPart(){
+  document.querySelectorAll("#mPart .mf-chip").forEach(el=> el.classList.toggle("on", selMPart.has(el.dataset.p)));
 }
 function closeModal(){ $("#ov").classList.remove("on"); active=null; }
 function toggleBlock(){
@@ -497,6 +513,7 @@ async function save(){
     memo: $("#mMemo").value.trim()||null, status,
     priority: selPrio,
     due: dueOut,
+    participants: [...selMPart],
     blockCause: ["繰越","ブロック"].includes(status)?$("#mBlockCause").value:null,
     blockReason: ["繰越","ブロック"].includes(status)?($("#mMemo").value.trim()||null):null,
   };
@@ -527,6 +544,7 @@ $("#nextMonth").addEventListener("click", ()=>{ closeDayModal(); viewM++; if(vie
 $("#thisMonth").addEventListener("click", ()=>{ closeDayModal(); const n=new Date(); viewY=n.getFullYear(); viewM=n.getMonth(); renderCal(); });
 $("#mSave").addEventListener("click", save);
 $("#mDueClear").addEventListener("click", ()=>{ $("#mDueDate").value=""; $("#mDueTime").value=""; });
+document.querySelectorAll("#mPart .mf-chip").forEach(el=> el.addEventListener("click", ()=>{ const p=el.dataset.p; if(selMPart.has(p)) selMPart.delete(p); else selMPart.add(p); renderMPart(); }));
 
 load();
 </script>

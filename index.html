@@ -79,6 +79,10 @@
   .stars-input .st{color:var(--line);transition:.12s}
   .stars-input .st.on{color:var(--gold)}
   .stars-input .st:hover{transform:scale(1.12)}
+  .part-input{display:flex;gap:6px;flex-wrap:wrap}
+  .part-chip{font:inherit;font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:20px;background:#fff;color:var(--muted);cursor:pointer;transition:.12s}
+  .part-chip:hover{border-color:var(--navy)}
+  .part-chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 </style>
 </head>
 <body>
@@ -112,11 +116,19 @@
 
         <div class="grid2">
           <div class="field">
-            <label>担当者</label>
+            <label>主担当<span class="hint">色分け・絞り込みの基準</span></label>
             <select id="assignee">
               <option value="">（未設定）</option>
               <option>菱沼翼</option><option>松田萌華</option><option>林優作</option>
             </select>
+          </div>
+          <div class="field" style="grid-column:1/-1">
+            <label>参加者<span class="hint">主担当以外で関わる人（複数可・任意）</span></label>
+            <div class="part-input" id="partInput">
+              <button type="button" class="part-chip" data-p="菱沼翼">菱沼翼</button>
+              <button type="button" class="part-chip" data-p="松田萌華">松田萌華</button>
+              <button type="button" class="part-chip" data-p="林優作">林優作</button>
+            </div>
           </div>
           <div class="field">
             <label>締切日<span class="hint">時刻は任意</span></label>
@@ -279,6 +291,16 @@
   });
   renderPrio();
 
+  // ---- 参加者（複数選択）----
+  let selParts = new Set();
+  function renderParts(){
+    document.querySelectorAll("#partInput .part-chip").forEach(el=> el.classList.toggle("on", selParts.has(el.dataset.p)));
+  }
+  document.querySelectorAll("#partInput .part-chip").forEach(el=>{
+    el.addEventListener("click", ()=>{ const p=el.dataset.p; if(selParts.has(p)) selParts.delete(p); else selParts.add(p); renderParts(); });
+  });
+  renderParts();
+
   // ---- 繰り返し設定 ----
   $("repeatToggle").addEventListener("change", ()=>{
     $("repeatFields").style.display = $("repeatToggle").checked ? "block" : "none";
@@ -345,6 +367,7 @@
       linkedGoal: $("linkedGoal").value || null,
       weight: $("weight").value,
       priority: selPrio,
+      participants: [...selParts],
       delegatable: $("delegatable").checked,
     };
 
@@ -361,7 +384,7 @@
       if(!isRepeat){
         // 通常登録（1件）
         const data = await registerOne({...basePayload, due: baseDue});
-        if(data.ok){ toast("登録しました"); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); }
+        if(data.ok){ toast("登録しました"); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
         else { toast("登録失敗：" + (data.error||"不明なエラー"), true); }
       } else {
         // 繰り返し登録
@@ -379,7 +402,7 @@
           const data = await registerOne({...basePayload, due: dates[i], taskName: name+(count>1?` [${i+1}回目]`:"")});
           if(data.ok) ok++; else fail++;
         }
-        if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); }
+        if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
         else { toast(`${ok}件成功・${fail}件失敗`, fail>0); }
       }
     }catch(e){ toast("通信エラー：" + e.message, true); }
