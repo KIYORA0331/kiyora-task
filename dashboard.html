@@ -65,6 +65,17 @@
   .day-item .dnm{font-size:13.5px;font-weight:500;line-height:1.45}
   .day-item .dsub{font-size:11.5px;color:var(--muted);margin-top:2px}
   .day-item .da{color:var(--muted);font-size:18px;flex-shrink:0}
+  /* 優先度の星 */
+  .stars-sm{display:inline-flex;gap:1px;font-size:11px;line-height:1;vertical-align:middle;flex-shrink:0}
+  .stars-sm .s{color:var(--line)}
+  .stars-sm .s.on{color:var(--gold)}
+  .stars-edit{display:flex;gap:5px;font-size:24px;line-height:1;cursor:pointer;user-select:none}
+  .stars-edit .st{color:var(--line);transition:.12s}
+  .stars-edit .st.on{color:var(--gold)}
+  .stars-edit .st:hover{transform:scale(1.12)}
+  /* 期限切れ・当日未完了の強調 */
+  .task.overdue{border-left-color:var(--crit)!important}
+  .task.overdue .nm{color:var(--crit);font-weight:700}
   .legend{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 6px;font-size:12px}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
@@ -106,8 +117,9 @@
     <div class="cards" id="cards"></div>
 
     <div class="sec-head">
-      <span class="t">今日やること</span><span class="d">期限順・進捗はその場で更新</span>
+      <span class="t">今日やること</span><span class="d">期限切れは赤・最上部／並び替え可</span>
       <div class="sp">
+        <select id="sortMode"><option value="due">期限順</option><option value="priority">優先度順</option></select>
         <select id="memberFilter"><option value="all">全員</option><option>菱沼翼</option><option>松田萌華</option><option>林優作</option></select>
       </div>
     </div>
@@ -153,6 +165,14 @@
           <option>外部連絡</option><option>書類作成</option><option>調査・検討</option><option>実作業</option><option>内部MTG</option><option>申請手続き</option>
         </select>
         <span class="muted" style="margin-left:auto">ぴったり無ければ少し手前（下）を</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <label class="muted">優先度</label>
+        <div class="stars-edit" id="mStars">
+          <span class="st" data-v="1">★</span><span class="st" data-v="2">★</span><span class="st" data-v="3">★</span><span class="st" data-v="4">★</span><span class="st" data-v="5">★</span>
+        </div>
+        <span class="muted" style="margin-left:auto;font-size:11px">星5が最優先</span>
       </div>
 
       <div id="mSteps" style="margin-bottom:14px"></div>
@@ -211,11 +231,20 @@ let TASKS = [];
 let COMPLETED = [];
 let active = null;
 let selStep = null;
+let selPrio = 3;
 let viewY = new Date().getFullYear();
 let viewM = new Date().getMonth();
 
 const $ = (s)=>document.querySelector(s);
 const fmtDay = (iso)=> iso ? `${(+iso.slice(5,7))}/${(+iso.slice(8,10))}` : "期限なし";
+const todayStr = ()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; };
+const isOverdue = (t)=> !!(t.due && t.due.slice(0,10) <= todayStr());
+const prio = (t)=> (typeof t.priority==="number" && t.priority>=1 && t.priority<=5) ? t.priority : 3;
+function starsSm(p){
+  const v = (typeof p==="number") ? Math.max(0,Math.min(5,Math.round(p))) : 0;
+  let s=""; for(let i=1;i<=5;i++) s+=`<span class="s ${i<=v?'on':''}">★</span>`;
+  return `<span class="stars-sm" title="優先度 ${v||'未設定'}">${s}</span>`;
+}
 
 function colorOf(t, mode){
   if(mode==="goal") return goalColor[t.goal]||"#888780";
@@ -252,14 +281,23 @@ function renderCards(){
 }
 
 function renderList(){
-  const f = $("#memberFilter").value, mode = $("#colorMode").value;
+  const f = $("#memberFilter").value, mode = $("#colorMode").value, sm = $("#sortMode").value;
   const list = TASKS.filter(t=> f==="all"||t.member===f);
-  $("#list").innerHTML = list.map(t=>{
+  const cmp = (sm==="priority")
+    ? (a,b)=> (prio(b)-prio(a)) || ((a.due||"9999-99-99").localeCompare(b.due||"9999-99-99"))
+    : (a,b)=> ((a.due||"9999-99-99").localeCompare(b.due||"9999-99-99")) || (prio(b)-prio(a));
+  const over = list.filter(isOverdue).sort(cmp);
+  const rest = list.filter(t=> !isOverdue(t)).sort(cmp);
+  const ordered = over.concat(rest);
+  $("#list").innerHTML = ordered.map(t=>{
     const c = colorOf(t,mode), idx = TASKS.indexOf(t);
     const stuck = t.status==="繰越"||t.status==="ブロック";
-    return `<div class="task" style="border-left-color:${c}">
+    const od = isOverdue(t);
+    return `<div class="task ${od?'overdue':''}" style="border-left-color:${od?'var(--crit)':c}">
       <div class="row1">
         <span class="nm">${esc(t.name)}</span>
+        ${starsSm(t.priority)}
+        ${od?`<span class="tag" style="color:var(--crit)">期限切れ</span>`:""}
         ${stuck?`<span class="tag" style="color:var(--crit)">滞留</span>`:""}
         ${t.delegatable?`<span class="tag" style="color:var(--warn)">委譲OK</span>`:""}
         <span class="meta">${t.member||"未設定"}・${fmtDay(t.due)}</span>
@@ -334,7 +372,7 @@ function openDayModal(iso){
       <span class="ci" style="background:${c}"></span>
       <div class="di">
         <div class="dnm">${esc(t.name)}</div>
-        <div class="dsub">${t.member||"未設定"}・${t.status}・${t.current||0}%${stuck?" ・滞留":""}</div>
+        <div class="dsub">${starsSm(t.priority)} ${t.member||"未設定"}・${t.status}・${t.current||0}%${stuck?" ・滞留":""}</div>
       </div>
       <span class="da">›</span>
     </div>`;
@@ -379,6 +417,8 @@ function updDelta(){
 
 function openModal(idx){
   active = TASKS[idx]; selStep=null;
+  selPrio = (typeof active.priority==="number" && active.priority>=1 && active.priority<=5) ? active.priority : 3;
+  renderMStars();
   $("#mTitle").textContent = active.name;
   $("#mMeta").textContent = `担当：${active.member||"未設定"}　現在 ${active.current||0}%　${active.status}`;
   $("#mStatus").value = active.status||"進行中";
@@ -389,6 +429,9 @@ function openModal(idx){
   toggleBlock();
   renderSteps();
   $("#ov").classList.add("on");
+}
+function renderMStars(){
+  document.querySelectorAll("#mStars .st").forEach(el=> el.classList.toggle("on", Number(el.dataset.v)<=selPrio));
 }
 function closeModal(){ $("#ov").classList.remove("on"); active=null; }
 function toggleBlock(){
@@ -403,6 +446,7 @@ async function save(){
   const payload = {
     taskId: active.id, member: active.member, before: active.current||0, after,
     memo: $("#mMemo").value.trim()||null, status,
+    priority: selPrio,
     blockCause: ["繰越","ブロック"].includes(status)?$("#mBlockCause").value:null,
     blockReason: ["繰越","ブロック"].includes(status)?($("#mMemo").value.trim()||null):null,
   };
@@ -420,6 +464,8 @@ function esc(s){ return String(s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 
 $("#memberFilter").addEventListener("change", ()=>{ closeDayModal(); renderAll(); });
 $("#colorMode").addEventListener("change", ()=>{ closeDayModal(); renderAll(); });
+$("#sortMode").addEventListener("change", renderList);
+document.querySelectorAll("#mStars .st").forEach(el=> el.addEventListener("click", ()=>{ selPrio=Number(el.dataset.v); renderMStars(); }));
 $("#mType").addEventListener("change", ()=>{ selStep=null; renderSteps(); });
 $("#mStatus").addEventListener("change", toggleBlock);
 $("#mClose").addEventListener("click", closeModal);

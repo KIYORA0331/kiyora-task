@@ -75,6 +75,10 @@
   .repeat-box label{color:#2a5a1e}
   .repeat-box select,
   .repeat-box input[type=text]{background:#fff}
+  .stars-input{display:flex;gap:5px;font-size:28px;line-height:1;cursor:pointer;user-select:none;padding:3px 0}
+  .stars-input .st{color:var(--line);transition:.12s}
+  .stars-input .st.on{color:var(--gold)}
+  .stars-input .st:hover{transform:scale(1.12)}
 </style>
 </head>
 <body>
@@ -131,6 +135,12 @@
             <select id="weight">
               <option>大</option><option selected>中</option><option>小</option>
             </select>
+          </div>
+          <div class="field">
+            <label>優先度<span class="hint">星5が最優先</span></label>
+            <div class="stars-input" id="prioInput">
+              <span class="st" data-v="1">★</span><span class="st" data-v="2">★</span><span class="st" data-v="3">★</span><span class="st" data-v="4">★</span><span class="st" data-v="5">★</span>
+            </div>
           </div>
           <div class="field">
             <label>作業種別</label>
@@ -254,6 +264,18 @@
 
   const $ = (id)=>document.getElementById(id);
 
+  // ---- 優先度（星1〜5）----
+  let selPrio = 3;
+  function renderPrio(){
+    document.querySelectorAll("#prioInput .st").forEach(el=>{
+      el.classList.toggle("on", Number(el.dataset.v) <= selPrio);
+    });
+  }
+  document.querySelectorAll("#prioInput .st").forEach(el=>{
+    el.addEventListener("click", ()=>{ selPrio = Number(el.dataset.v); renderPrio(); });
+  });
+  renderPrio();
+
   // ---- 繰り返し設定 ----
   $("repeatToggle").addEventListener("change", ()=>{
     $("repeatFields").style.display = $("repeatToggle").checked ? "block" : "none";
@@ -318,6 +340,7 @@
       taskType: $("taskType").value,
       linkedGoal: $("linkedGoal").value || null,
       weight: $("weight").value,
+      priority: selPrio,
       delegatable: $("delegatable").checked,
     };
 
@@ -331,7 +354,7 @@
       if(!isRepeat){
         // 通常登録（1件）
         const data = await registerOne({...basePayload, due: baseDue});
-        if(data.ok){ toast("登録しました"); $("freeText").value=""; $("parsedBox").style.display="none"; }
+        if(data.ok){ toast("登録しました"); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); }
         else { toast("登録失敗：" + (data.error||"不明なエラー"), true); }
       } else {
         // 繰り返し登録
@@ -349,7 +372,7 @@
           const data = await registerOne({...basePayload, due: dates[i], taskName: name+(count>1?` [${i+1}回目]`:"")});
           if(data.ok) ok++; else fail++;
         }
-        if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("parsedBox").style.display="none"; }
+        if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); }
         else { toast(`${ok}件成功・${fail}件失敗`, fail>0); }
       }
     }catch(e){ toast("通信エラー：" + e.message, true); }
