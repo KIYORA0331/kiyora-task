@@ -49,6 +49,7 @@ function mapTask(pg) {
     goal: sel(p["連動目標"]),
     weight: sel(p["重み"]),
     priority: num(p["優先度"]),
+    participants: (p["参加者"] && p["参加者"].multi_select) ? p["参加者"].multi_select.map(o=>o.name) : [],
     carryCount: num(p["繰越回数"]),
     lastModified: pg.last_edited_time,
   };

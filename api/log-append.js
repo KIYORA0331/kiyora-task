@@ -70,6 +70,7 @@ export default async function handler(req, res) {
     };
     if (b.blockCause) taskProps["ブロック起因"] = { select: { name: b.blockCause } };
     if (typeof b.priority === "number" && b.priority >= 1 && b.priority <= 5) taskProps["優先度"] = { number: b.priority };
+    if (Array.isArray(b.participants)) taskProps["参加者"] = { multi_select: b.participants.map(n => ({ name: n })) };
     if (typeof b.due === "string") {
       taskProps["When_期限"] = b.due.trim() ? { date: { start: b.due } } : { date: null };
     }
