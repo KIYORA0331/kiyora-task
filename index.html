@@ -119,8 +119,11 @@
             </select>
           </div>
           <div class="field">
-            <label>期限</label>
-            <input type="text" id="due" placeholder="YYYY-MM-DD" />
+            <label>締切日<span class="hint">時刻は任意</span></label>
+            <div style="display:flex;gap:8px">
+              <input type="date" id="due" style="flex:1.4" />
+              <input type="time" id="dueTime" style="flex:1" />
+            </div>
           </div>
           <div class="field">
             <label>連動目標</label>
@@ -316,6 +319,7 @@
     $("linkedGoal").value = firstMatch(GOAL, text);
     $("weight").value     = parseWeight(text);
     $("due").value        = parseDue(text);
+    $("dueTime").value    = "";
     $("parsedBox").style.display = "block";
     $("parsedBox").scrollIntoView({behavior:"smooth", block:"nearest"});
     updateRepeatPreview();
@@ -345,7 +349,10 @@
     };
 
     const isRepeat = $("repeatToggle").checked;
-    const baseDue = $("due").value.trim() || null;
+    const dateVal = $("due").value;            // "YYYY-MM-DD" or ""
+    const timeVal = $("dueTime").value;        // "HH:MM" or ""
+    const mkDue = (ds)=> ds ? (timeVal ? `${ds}T${timeVal}:00+09:00` : ds) : null;
+    const baseDue = mkDue(dateVal);
     const days = getIntervalDays();
     const count = parseInt($("repeatCount").value);
 
@@ -358,12 +365,12 @@
         else { toast("登録失敗：" + (data.error||"不明なエラー"), true); }
       } else {
         // 繰り返し登録
-        if(!baseDue){ toast("繰り返し登録には期限の設定が必要です", true); return; }
+        if(!dateVal){ toast("繰り返し登録には締切日の設定が必要です", true); return; }
         if(!days){ toast("繰り返し間隔を正しく設定してください", true); return; }
         const dates = [baseDue];
         for(let i=1;i<count;i++){
-          const d = new Date(baseDue+"T00:00:00"); d.setDate(d.getDate()+days*i);
-          dates.push(toISO(d));
+          const d = new Date(dateVal+"T00:00:00"); d.setDate(d.getDate()+days*i);
+          dates.push(mkDue(toISO(d)));
         }
         let ok=0, fail=0;
         for(let i=0; i<dates.length; i++){

@@ -73,9 +73,13 @@
   .stars-edit .st{color:var(--line);transition:.12s}
   .stars-edit .st.on{color:var(--gold)}
   .stars-edit .st:hover{transform:scale(1.12)}
-  /* 期限切れ・当日未完了の強調 */
-  .task.overdue{border-left-color:var(--crit)!important}
-  .task.overdue .nm{color:var(--crit);font-weight:700}
+  /* 期限超過のみ文字を赤太字に（本日締切は黒のまま）。帯は担当者色を維持 */
+  .task.past .nm{color:var(--crit);font-weight:700}
+  /* メンバー複数選択チップ */
+  .mfilter{display:inline-flex;gap:5px;flex-wrap:wrap;vertical-align:middle}
+  .mf-chip{font:inherit;font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:20px;background:#fff;color:var(--muted);cursor:pointer;transition:.12s}
+  .mf-chip:hover{border-color:var(--navy)}
+  .mf-chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
   .legend{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 6px;font-size:12px}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
@@ -120,7 +124,12 @@
       <span class="t">今日やること</span><span class="d">期限切れは赤・最上部／並び替え可</span>
       <div class="sp">
         <select id="sortMode"><option value="due">期限順</option><option value="priority">優先度順</option></select>
-        <select id="memberFilter"><option value="all">全員</option><option>菱沼翼</option><option>松田萌華</option><option>林優作</option></select>
+        <div class="mfilter" id="memberFilter">
+          <button class="mf-chip on" data-m="all">全員</button>
+          <button class="mf-chip" data-m="菱沼翼">菱沼翼</button>
+          <button class="mf-chip" data-m="松田萌華">松田萌華</button>
+          <button class="mf-chip" data-m="林優作">林優作</button>
+        </div>
       </div>
     </div>
     <div class="list" id="list"><div class="loading">読み込み中…</div></div>
@@ -173,6 +182,13 @@
           <span class="st" data-v="1">★</span><span class="st" data-v="2">★</span><span class="st" data-v="3">★</span><span class="st" data-v="4">★</span><span class="st" data-v="5">★</span>
         </div>
         <span class="muted" style="margin-left:auto;font-size:11px">星5が最優先</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <label class="muted">締切</label>
+        <input type="date" id="mDueDate" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:#fcfdff;color:var(--ink)">
+        <input type="time" id="mDueTime" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:#fcfdff;color:var(--ink)">
+        <button class="btn" id="mDueClear" style="font-size:11px;padding:5px 10px">クリア</button>
       </div>
 
       <div id="mSteps" style="margin-bottom:14px"></div>
@@ -232,11 +248,36 @@ let COMPLETED = [];
 let active = null;
 let selStep = null;
 let selPrio = 3;
+let memberSel = new Set();
 let viewY = new Date().getFullYear();
 let viewM = new Date().getMonth();
 
 const $ = (s)=>document.querySelector(s);
-const fmtDay = (iso)=> iso ? `${(+iso.slice(5,7))}/${(+iso.slice(8,10))}` : "期限なし";
+const memberPass = (t)=> memberSel.size===0 || memberSel.has(t.member);
+function renderMemberChips(){
+  document.querySelectorAll("#memberFilter .mf-chip").forEach(btn=>{
+    const m = btn.dataset.m;
+    btn.classList.toggle("on", m==="all" ? memberSel.size===0 : memberSel.has(m));
+  });
+}
+function setupMemberFilter(){
+  document.querySelectorAll("#memberFilter .mf-chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const m = btn.dataset.m;
+      if(m==="all") memberSel.clear();
+      else if(memberSel.has(m)) memberSel.delete(m);
+      else memberSel.add(m);
+      renderMemberChips(); closeDayModal(); renderAll();
+    });
+  });
+  renderMemberChips();
+}
+const fmtDay = (iso)=>{
+  if(!iso) return "期限なし";
+  let s = `${(+iso.slice(5,7))}/${(+iso.slice(8,10))}`;
+  if(iso.length>10){ const hm=iso.slice(11,16); if(hm && hm!=="00:00") s+=` ${hm}`; }
+  return s;
+};
 const todayStr = ()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; };
 const isOverdue = (t)=> !!(t.due && t.due.slice(0,10) <= todayStr());
 const prio = (t)=> (typeof t.priority==="number" && t.priority>=1 && t.priority<=5) ? t.priority : 3;
@@ -281,23 +322,27 @@ function renderCards(){
 }
 
 function renderList(){
-  const f = $("#memberFilter").value, mode = $("#colorMode").value, sm = $("#sortMode").value;
-  const list = TASKS.filter(t=> f==="all"||t.member===f);
+  const mode = $("#colorMode").value, sm = $("#sortMode").value;
+  const list = TASKS.filter(memberPass);
   const cmp = (sm==="priority")
     ? (a,b)=> (prio(b)-prio(a)) || ((a.due||"9999-99-99").localeCompare(b.due||"9999-99-99"))
     : (a,b)=> ((a.due||"9999-99-99").localeCompare(b.due||"9999-99-99")) || (prio(b)-prio(a));
   const over = list.filter(isOverdue).sort(cmp);
   const rest = list.filter(t=> !isOverdue(t)).sort(cmp);
   const ordered = over.concat(rest);
+  const today = todayStr();
   $("#list").innerHTML = ordered.map(t=>{
     const c = colorOf(t,mode), idx = TASKS.indexOf(t);
     const stuck = t.status==="繰越"||t.status==="ブロック";
     const od = isOverdue(t);
-    return `<div class="task ${od?'overdue':''}" style="border-left-color:${od?'var(--crit)':c}">
+    const isDueToday = (t.due||"").slice(0,10)===today;
+    const isPast = od && !isDueToday;
+    return `<div class="task ${isPast?'past':''}" style="border-left-color:${c}">
       <div class="row1">
         <span class="nm">${esc(t.name)}</span>
         ${starsSm(t.priority)}
-        ${od?`<span class="tag" style="color:var(--crit)">期限切れ</span>`:""}
+        ${isPast?`<span class="tag" style="color:var(--crit)">期限切れ</span>`:""}
+        ${isDueToday?`<span class="tag" style="color:var(--warn)">本日締切日</span>`:""}
         ${stuck?`<span class="tag" style="color:var(--crit)">滞留</span>`:""}
         ${t.delegatable?`<span class="tag" style="color:var(--warn)">委譲OK</span>`:""}
         <span class="meta">${t.member||"未設定"}・${fmtDay(t.due)}</span>
@@ -312,8 +357,7 @@ function renderList(){
 }
 
 function renderDone(){
-  const f = $("#memberFilter").value;
-  const list = COMPLETED.filter(t=> f==="all"||t.member===f);
+  const list = COMPLETED.filter(memberPass);
   $("#doneCnt").textContent = `${list.length}件`;
   $("#doneList").innerHTML = list.map(t=>{
     const due = t.due ? fmtDay(t.due) : "期限なし";
@@ -334,7 +378,7 @@ function renderLegend(){
 }
 
 function renderCal(){
-  const mode = $("#colorMode").value, f = $("#memberFilter").value;
+  const mode = $("#colorMode").value;
   const now = new Date(), y=viewY, m=viewM;
   $("#calMonth").textContent = `${y}年${m+1}月`;
   const first = new Date(y,m,1); let startDow = (first.getDay()+6)%7;
@@ -346,7 +390,7 @@ function renderCal(){
   for(let d=1; d<=days; d++){
     const iso = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const isToday = (isThisMonth && d===now.getDate());
-    const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && (f==="all"||t.member===f));
+    const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && memberPass(t));
     const shown = dt.slice(0, MAXCHIP);
     const chips = shown.map(t=>{const c=colorOf(t,mode);
       return `<div class="chip" style="background:${c}" title="${esc(t.name)}">${esc(t.name)}</div>`;}).join("");
@@ -360,11 +404,11 @@ function renderCal(){
 
 // 日別タスク一覧モーダル
 function openDayModal(iso){
-  const f = $("#memberFilter").value, mode = $("#colorMode").value;
-  const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && (f==="all"||t.member===f));
+  const mode = $("#colorMode").value;
+  const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && memberPass(t));
   const [yy,mm,dd] = iso.split("-").map(Number);
   $("#dayTitle").textContent = `${mm}月${dd}日`;
-  $("#daySub").textContent = `この日のタスク ${dt.length}件${f!=="all"?`（${f}）`:""}`;
+  $("#daySub").textContent = `この日のタスク ${dt.length}件${memberSel.size ? `（${[...memberSel].join("・")}）` : ""}`;
   $("#dayList").innerHTML = dt.map(t=>{
     const c = colorOf(t,mode), idx = TASKS.indexOf(t);
     const stuck = t.status==="繰越"||t.status==="ブロック";
@@ -419,6 +463,9 @@ function openModal(idx){
   active = TASKS[idx]; selStep=null;
   selPrio = (typeof active.priority==="number" && active.priority>=1 && active.priority<=5) ? active.priority : 3;
   renderMStars();
+  const due = active.due || "";
+  $("#mDueDate").value = due ? due.slice(0,10) : "";
+  $("#mDueTime").value = (due.length>10 && due.slice(11,16)!=="00:00") ? due.slice(11,16) : "";
   $("#mTitle").textContent = active.name;
   $("#mMeta").textContent = `担当：${active.member||"未設定"}　現在 ${active.current||0}%　${active.status}`;
   $("#mStatus").value = active.status||"進行中";
@@ -443,10 +490,13 @@ async function save(){
   if(!active) return;
   const after = (selStep!==null)?PCTS[selStep]:(active.current||0);
   const status = $("#mStatus").value;
+  const dDate = $("#mDueDate").value, dTime = $("#mDueTime").value;
+  const dueOut = dDate ? (dTime ? `${dDate}T${dTime}:00+09:00` : dDate) : "";
   const payload = {
     taskId: active.id, member: active.member, before: active.current||0, after,
     memo: $("#mMemo").value.trim()||null, status,
     priority: selPrio,
+    due: dueOut,
     blockCause: ["繰越","ブロック"].includes(status)?$("#mBlockCause").value:null,
     blockReason: ["繰越","ブロック"].includes(status)?($("#mMemo").value.trim()||null):null,
   };
@@ -462,7 +512,7 @@ async function save(){
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-$("#memberFilter").addEventListener("change", ()=>{ closeDayModal(); renderAll(); });
+setupMemberFilter();
 $("#colorMode").addEventListener("change", ()=>{ closeDayModal(); renderAll(); });
 $("#sortMode").addEventListener("change", renderList);
 document.querySelectorAll("#mStars .st").forEach(el=> el.addEventListener("click", ()=>{ selPrio=Number(el.dataset.v); renderMStars(); }));
@@ -476,6 +526,7 @@ $("#prevMonth").addEventListener("click", ()=>{ closeDayModal(); viewM--; if(vie
 $("#nextMonth").addEventListener("click", ()=>{ closeDayModal(); viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
 $("#thisMonth").addEventListener("click", ()=>{ closeDayModal(); const n=new Date(); viewY=n.getFullYear(); viewM=n.getMonth(); renderCal(); });
 $("#mSave").addEventListener("click", save);
+$("#mDueClear").addEventListener("click", ()=>{ $("#mDueDate").value=""; $("#mDueTime").value=""; });
 
 load();
 </script>
