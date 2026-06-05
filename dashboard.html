@@ -45,11 +45,26 @@
   .btn.primary{background:var(--navy);color:#fff;border:none}
   .cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
   .dow{font-size:11px;color:var(--muted);text-align:center;padding:2px 0}
-  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px}
-  .cell{min-height:62px;border:1px solid var(--line);border-radius:7px;padding:3px 4px;background:var(--card)}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:4px}
+  .cal-nav{display:flex;align-items:center;justify-content:center;gap:10px;margin:6px 0 10px}
+  .cal-nav .cal-month{font-size:14px;font-weight:700;color:var(--navy);min-width:128px;text-align:center}
+  .btn.nav{font-size:18px;line-height:1;padding:4px 16px}
+  .btn.today-btn{font-size:12px;padding:6px 12px;margin-left:4px}
+  .cell{min-height:104px;border:1px solid var(--line);border-radius:7px;padding:5px 5px;background:var(--card);cursor:pointer;transition:.12s}
+  .cell.empty{cursor:default}
+  .cell.has:hover{border-color:var(--navy);box-shadow:0 2px 8px rgba(31,56,100,.12)}
   .cell.today{border-color:var(--navy);background:rgba(31,56,100,.05)}
-  .cell .dn{font-size:10px;color:var(--muted)}
-  .chip{font-size:9.5px;color:#fff;border-radius:3px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .cell .dn{font-size:11px;color:var(--muted);font-weight:500}
+  .chip{font-size:10.5px;color:#fff;border-radius:3px;padding:2px 5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .chip-more{font-size:10px;color:var(--navy);font-weight:600;margin-top:3px;padding:1px 4px}
+  /* 日別モーダルの行 */
+  .day-item{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;cursor:pointer;background:#fff;transition:.12s}
+  .day-item:hover{border-color:var(--navy);background:var(--bg)}
+  .day-item .ci{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .day-item .di{flex:1;min-width:0}
+  .day-item .dnm{font-size:13.5px;font-weight:500;line-height:1.45}
+  .day-item .dsub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .day-item .da{color:var(--muted);font-size:18px;flex-shrink:0}
   .legend{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 6px;font-size:12px}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
@@ -99,13 +114,19 @@
     <div class="list" id="list"><div class="loading">読み込み中…</div></div>
 
     <div class="sec-head">
-      <span class="t">カレンダー</span><span class="d">タスク管理用</span>
+      <span class="t">カレンダー</span><span class="d">日付をクリックでその日の詳細</span>
       <div class="sp">
         <label class="muted">色分け</label>
         <select id="colorMode"><option value="member">担当者で自動</option><option value="goal">連動目標で</option><option value="status">ステータスで</option></select>
       </div>
     </div>
     <div class="legend" id="legend"></div>
+    <div class="cal-nav">
+      <button class="btn nav" id="prevMonth" aria-label="前の月">‹</button>
+      <span class="cal-month" id="calMonth">----年--月</span>
+      <button class="btn nav" id="nextMonth" aria-label="次の月">›</button>
+      <button class="btn today-btn" id="thisMonth">今月</button>
+    </div>
     <div class="cal-head"><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div><div class="dow">日</div></div>
     <div class="cal" id="cal"></div>
 
@@ -160,6 +181,18 @@
     </div>
   </div>
 
+  <!-- 日別タスク一覧モーダル -->
+  <div class="ov" id="dayOv">
+    <div class="modal">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <h3 id="dayTitle">日付</h3>
+        <span style="margin-left:auto;cursor:pointer;color:var(--muted)" id="dayClose">✕</span>
+      </div>
+      <div class="muted" style="margin-bottom:14px" id="daySub">この日のタスク</div>
+      <div id="dayList"></div>
+    </div>
+  </div>
+
 <script>
 const LADDER = {
   "外部連絡":["まだ手をつけてない","内容を確認した","下書きを始めた","半分くらい書けた","ほぼ書き終えた","確認待ち・送る直前","送信した・完了"],
@@ -178,6 +211,8 @@ let TASKS = [];
 let COMPLETED = [];
 let active = null;
 let selStep = null;
+let viewY = new Date().getFullYear();
+let viewM = new Date().getMonth();
 
 const $ = (s)=>document.querySelector(s);
 const fmtDay = (iso)=> iso ? `${(+iso.slice(5,7))}/${(+iso.slice(8,10))}` : "期限なし";
@@ -262,23 +297,55 @@ function renderLegend(){
 
 function renderCal(){
   const mode = $("#colorMode").value, f = $("#memberFilter").value;
-  const now = new Date(), y=now.getFullYear(), m=now.getMonth();
+  const now = new Date(), y=viewY, m=viewM;
+  $("#calMonth").textContent = `${y}年${m+1}月`;
   const first = new Date(y,m,1); let startDow = (first.getDay()+6)%7;
   const days = new Date(y,m+1,0).getDate();
+  const isThisMonth = (y===now.getFullYear() && m===now.getMonth());
+  const MAXCHIP = 3;
   let cells = "";
-  for(let i=0;i<startDow;i++) cells+=`<div></div>`;
+  for(let i=0;i<startDow;i++) cells+=`<div class="cell empty"></div>`;
   for(let d=1; d<=days; d++){
     const iso = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const isToday = (d===now.getDate());
-    const dt = TASKS.filter(t=> t.due===iso && (f==="all"||t.member===f));
-    const chips = dt.map(t=>{const c=colorOf(t,mode);const idx=TASKS.indexOf(t);
-      return `<div class="chip" style="background:${c}" onclick="openModal(${idx})">${esc(t.name)}</div>`;}).join("");
-    cells += `<div class="cell ${isToday?'today':''}"><div class="dn" style="${isToday?'color:var(--navy);font-weight:500':''}">${d}</div>${chips}</div>`;
+    const isToday = (isThisMonth && d===now.getDate());
+    const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && (f==="all"||t.member===f));
+    const shown = dt.slice(0, MAXCHIP);
+    const chips = shown.map(t=>{const c=colorOf(t,mode);
+      return `<div class="chip" style="background:${c}" title="${esc(t.name)}">${esc(t.name)}</div>`;}).join("");
+    const more = dt.length>MAXCHIP ? `<div class="chip-more">＋${dt.length-MAXCHIP}件</div>` : "";
+    const hasCls = dt.length ? "has" : "empty";
+    const onclick = dt.length ? ` onclick="openDayModal('${iso}')"` : "";
+    cells += `<div class="cell ${isToday?'today':''} ${hasCls}"${onclick}><div class="dn" style="${isToday?'color:var(--navy)':''}">${d}</div>${chips}${more}</div>`;
   }
   $("#cal").innerHTML = cells;
 }
 
+// 日別タスク一覧モーダル
+function openDayModal(iso){
+  const f = $("#memberFilter").value, mode = $("#colorMode").value;
+  const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && (f==="all"||t.member===f));
+  const [yy,mm,dd] = iso.split("-").map(Number);
+  $("#dayTitle").textContent = `${mm}月${dd}日`;
+  $("#daySub").textContent = `この日のタスク ${dt.length}件${f!=="all"?`（${f}）`:""}`;
+  $("#dayList").innerHTML = dt.map(t=>{
+    const c = colorOf(t,mode), idx = TASKS.indexOf(t);
+    const stuck = t.status==="繰越"||t.status==="ブロック";
+    return `<div class="day-item" onclick="fromDay(${idx})">
+      <span class="ci" style="background:${c}"></span>
+      <div class="di">
+        <div class="dnm">${esc(t.name)}</div>
+        <div class="dsub">${t.member||"未設定"}・${t.status}・${t.current||0}%${stuck?" ・滞留":""}</div>
+      </div>
+      <span class="da">›</span>
+    </div>`;
+  }).join("") || `<div class="muted">この日のタスクはありません</div>`;
+  $("#dayOv").classList.add("on");
+}
+function closeDayModal(){ $("#dayOv").classList.remove("on"); }
+function fromDay(idx){ closeDayModal(); openModal(idx); }
+
 function renderAll(){ renderCards(); renderList(); renderDone(); renderLegend(); renderCal(); }
+
 
 // 完了セクションの開閉
 document.getElementById("doneToggle").addEventListener("click", ()=>{
@@ -351,12 +418,17 @@ async function save(){
 
 function esc(s){ return String(s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-$("#memberFilter").addEventListener("change", renderAll);
-$("#colorMode").addEventListener("change", renderAll);
+$("#memberFilter").addEventListener("change", ()=>{ closeDayModal(); renderAll(); });
+$("#colorMode").addEventListener("change", ()=>{ closeDayModal(); renderAll(); });
 $("#mType").addEventListener("change", ()=>{ selStep=null; renderSteps(); });
 $("#mStatus").addEventListener("change", toggleBlock);
 $("#mClose").addEventListener("click", closeModal);
 $("#ov").addEventListener("click",(e)=>{ if(e.target.id==="ov") closeModal(); });
+$("#dayClose").addEventListener("click", closeDayModal);
+$("#dayOv").addEventListener("click",(e)=>{ if(e.target.id==="dayOv") closeDayModal(); });
+$("#prevMonth").addEventListener("click", ()=>{ closeDayModal(); viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
+$("#nextMonth").addEventListener("click", ()=>{ closeDayModal(); viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
+$("#thisMonth").addEventListener("click", ()=>{ closeDayModal(); const n=new Date(); viewY=n.getFullYear(); viewM=n.getMonth(); renderCal(); });
 $("#mSave").addEventListener("click", save);
 
 load();
