@@ -48,6 +48,7 @@ function mapTask(pg) {
     delegatable: chk(p["委譲可能"]),
     goal: sel(p["連動目標"]),
     weight: sel(p["重み"]),
+    priority: num(p["優先度"]),
     carryCount: num(p["繰越回数"]),
     lastModified: pg.last_edited_time,
   };

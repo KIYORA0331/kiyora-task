@@ -69,6 +69,7 @@ export default async function handler(req, res) {
       "ステータス": { select: { name: status } },
     };
     if (b.blockCause) taskProps["ブロック起因"] = { select: { name: b.blockCause } };
+    if (typeof b.priority === "number" && b.priority >= 1 && b.priority <= 5) taskProps["優先度"] = { number: b.priority };
     if (status === "完了") taskProps["現在到達度"] = { number: 100 };
 
     const taskRes = await notion(`pages/${b.taskId}`, "PATCH", { properties: taskProps });

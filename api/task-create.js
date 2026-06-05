@@ -40,6 +40,7 @@ export default async function handler(req, res) {
       "タスク種別": sel(b.taskType),
       "連動目標": sel(b.linkedGoal),
       "重み": sel(b.weight || "中"),
+      "優先度": { number: (typeof b.priority === "number" && b.priority >= 1 && b.priority <= 5) ? b.priority : 3 },
       "ステータス": { select: { name: "未着手" } },
       "ブロック起因": { select: { name: "なし" } },
       "現在到達度": { number: 0 },
