@@ -3,5 +3,11 @@
   "version": "1.0.0",
   "description": "KIYORA 業務タスク管理システム（HR系とは完全独立）",
   "type": "module",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "ical-expander": "^3.2.0"
+  }
 }
