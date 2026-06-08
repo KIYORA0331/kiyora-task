@@ -22,8 +22,10 @@
   .topbar .back{font:inherit;font-size:12px;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.45);padding:5px 12px;border-radius:6px;cursor:pointer}
   .topbar .back:hover{background:rgba(255,255,255,.22)}
   .wrap{max-width:920px;margin:24px auto 0;padding:0 18px}
-  .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
-  .mcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px}
+  .mcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:left;cursor:pointer;font:inherit;width:100%;transition:all .12s}
+  .mcard:hover{border-color:var(--navy)}
+  .mcard.active{border-color:var(--navy);background:#E8EEF7;box-shadow:0 0 0 1px var(--navy)}
   .mcard .l{font-size:12px;color:var(--muted)}
   .mcard .v{font-size:24px;font-weight:700;color:var(--navy)}
   .sec-head{display:flex;align-items:center;gap:10px;margin:0 0 12px}
@@ -123,20 +125,7 @@
   <div class="wrap">
     <div class="cards" id="cards"></div>
 
-    <div class="sec-head">
-      <span class="t">今日やること</span><span class="d">期限切れは赤・最上部／並び替え可</span>
-      <div class="sp">
-        <select id="sortMode"><option value="due">期限順</option><option value="priority">優先度順</option></select>
-        <div class="mfilter" id="memberFilter">
-          <button class="mf-chip on" data-m="all">全員</button>
-          <button class="mf-chip" data-m="菱沼翼">菱沼翼</button>
-          <button class="mf-chip" data-m="松田萌華">松田萌華</button>
-          <button class="mf-chip" data-m="林優作">林優作</button>
-        </div>
-      </div>
-    </div>
-    <div class="list" id="list"><div class="loading">読み込み中…</div></div>
-
+    <div id="calSection">
     <div class="sec-head">
       <span class="t">カレンダー</span><span class="d">日付をクリックでその日の詳細</span>
       <div class="sp">
@@ -153,6 +142,21 @@
     </div>
     <div class="cal-head"><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div><div class="dow">日</div></div>
     <div class="cal" id="cal"></div>
+    </div>
+
+    <div class="sec-head">
+      <span class="t">今日やること</span><span class="d">期限切れは赤・最上部／並び替え可</span>
+      <div class="sp">
+        <select id="sortMode"><option value="due">期限順</option><option value="priority">優先度順</option></select>
+        <div class="mfilter" id="memberFilter">
+          <button class="mf-chip on" data-m="all">全員</button>
+          <button class="mf-chip" data-m="菱沼翼">菱沼翼</button>
+          <button class="mf-chip" data-m="松田萌華">松田萌華</button>
+          <button class="mf-chip" data-m="林優作">林優作</button>
+        </div>
+      </div>
+    </div>
+    <div class="list" id="list"><div class="loading">読み込み中…</div></div>
 
     <!-- 完了タスクセクション -->
     <div class="done-toggle" id="doneToggle">
@@ -260,7 +264,7 @@ let TASKS = [];
 let COMPLETED = [];
 let active = null;
 let selStep = null;
-function goBack(){ if(history.length>1){ history.back(); } else { location.href="https://kiyora-hr.vercel.app/"; } }
+function goBack(){ location.href="https://kiyora-hr.vercel.app/"; }
 let selPrio = 3;
 let selMPart = new Set();
 let memberSel = new Set();
@@ -321,24 +325,50 @@ async function load(){
   }catch(e){ $("#list").innerHTML = `<div class="loading">通信エラー：${e.message}</div>`; }
 }
 
+let cardFilter = null;
+function cardMatch(t){
+  if(!cardFilter) return true;
+  if(cardFilter.act==="status") return t.status===cardFilter.val;
+  if(cardFilter.act==="stuck") return t.status==="繰越"||t.status==="ブロック";
+  if(cardFilter.act==="deleg") return t.delegatable;
+  return true;
+}
 function renderCards(){
   const todayISO = new Date().toISOString().slice(0,10);
   const todayN = TASKS.filter(t=> !t.due || t.due<=todayISO).length;
+  const notStarted = TASKS.filter(t=>t.status==="未着手").length;
   const prog = TASKS.filter(t=>t.status==="進行中").length;
   const stuck = TASKS.filter(t=>t.status==="繰越"||t.status==="ブロック").length;
   const dele = TASKS.filter(t=>t.delegatable).length;
   const done = COMPLETED.length;
+  const isAct = (a,v)=> (cardFilter && cardFilter.act===a && (v===undefined || cardFilter.val===v)) ? " active" : "";
+  const clrAct = cardFilter===null ? " active" : "";
   $("#cards").innerHTML = `
-    <div class="mcard"><div class="l">今日のタスク</div><div class="v">${todayN}</div></div>
-    <div class="mcard"><div class="l">進行中</div><div class="v">${prog}</div></div>
-    <div class="mcard"><div class="l">繰越・滞留</div><div class="v" style="color:var(--crit)">${stuck}</div></div>
-    <div class="mcard"><div class="l">委譲募集中</div><div class="v" style="color:var(--warn)">${dele}</div></div>
-    <div class="mcard"><div class="l">完了済み</div><div class="v" style="color:var(--ok)">${done}</div></div>`;
+    <button class="mcard${clrAct}" data-act="clear"><div class="l">今日のタスク</div><div class="v">${todayN}</div></button>
+    <button class="mcard${isAct("status","未着手")}" data-act="status" data-val="未着手"><div class="l">未着手</div><div class="v" style="color:#888780">${notStarted}</div></button>
+    <button class="mcard${isAct("status","進行中")}" data-act="status" data-val="進行中"><div class="l">進行中</div><div class="v">${prog}</div></button>
+    <button class="mcard${isAct("stuck")}" data-act="stuck"><div class="l">繰越・滞留</div><div class="v" style="color:var(--crit)">${stuck}</div></button>
+    <button class="mcard${isAct("deleg")}" data-act="deleg"><div class="l">委譲募集中</div><div class="v" style="color:var(--warn)">${dele}</div></button>
+    <button class="mcard" data-act="scroll"><div class="l">完了済み</div><div class="v" style="color:var(--ok)">${done}</div></button>`;
 }
+function applyCardFilter(){
+  const cs = document.getElementById("calSection");
+  if(cs) cs.style.display = cardFilter ? "none" : "";
+  renderCards(); renderList();
+}
+document.getElementById("cards").addEventListener("click", (e)=>{
+  const card = e.target.closest(".mcard"); if(!card) return;
+  const a = card.getAttribute("data-act");
+  if(a==="scroll"){ document.getElementById("doneToggle").scrollIntoView({behavior:"smooth",block:"start"}); return; }
+  if(a==="clear"){ cardFilter=null; }
+  else if(a==="status"){ const v=card.getAttribute("data-val"); cardFilter=(cardFilter&&cardFilter.act==="status"&&cardFilter.val===v)?null:{act:"status",val:v}; }
+  else { cardFilter=(cardFilter&&cardFilter.act===a)?null:{act:a}; }
+  applyCardFilter();
+});
 
 function renderList(){
   const mode = $("#colorMode").value, sm = $("#sortMode").value;
-  const list = TASKS.filter(memberPass);
+  const list = TASKS.filter(t=> memberPass(t) && cardMatch(t));
   const cmp = (sm==="priority")
     ? (a,b)=> (prio(b)-prio(a)) || ((a.due||"9999-99-99").localeCompare(b.due||"9999-99-99"))
     : (a,b)=> ((a.due||"9999-99-99").localeCompare(b.due||"9999-99-99")) || (prio(b)-prio(a));

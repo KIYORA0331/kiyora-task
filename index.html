@@ -295,7 +295,7 @@
   renderPrio();
 
   // ---- 戻るボタン ----
-  $("backBtn").addEventListener("click", ()=>{ if(history.length>1){ history.back(); } else { location.href="https://kiyora-hr.vercel.app/"; } });
+  $("backBtn").addEventListener("click", ()=>{ location.href="https://kiyora-hr.vercel.app/"; });
 
   // ---- 参加者（複数選択）----
   let selParts = new Set();

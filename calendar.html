@@ -154,7 +154,7 @@ let view = "month";
 let anchor = new Date();
 let memberSel = new Set();
 
-function goBack(){ if(history.length>1){ history.back(); } else { location.href="https://kiyora-hr.vercel.app/"; } }
+function goBack(){ location.href="https://kiyora-hr.vercel.app/"; }
 const memberPassTask = (t)=> memberSel.size===0 || memberSel.has(t.member);
 const memberPassEvent = (e)=> memberSel.size===0 || (e.participants||[]).some(p=>memberSel.has(p));
 
