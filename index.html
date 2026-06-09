@@ -142,11 +142,20 @@
           </div>
           <div class="field">
             <label>連動目標</label>
-            <select id="linkedGoal">
-              <option value="">なし</option>
-              <option>100病院</option><option>OEM契約</option><option>海外商談</option>
-              <option>資金調達</option><option>知財</option><option>組織</option><option>その他</option>
-            </select>
+            <div style="display:flex;gap:8px">
+              <select id="linkedGoal" style="flex:1">
+                <option value="">なし</option>
+                <option data-preset>100病院</option><option data-preset>OEM契約</option><option data-preset>海外商談</option>
+                <option data-preset>資金調達</option><option data-preset>知財</option><option data-preset>組織</option>
+                <option data-preset>会計・経理</option><option data-preset>その他</option>
+                <option value="__add__">＋ 新しい目標を追加…</option>
+              </select>
+              <button type="button" id="goalDelBtn" disabled style="flex-shrink:0;padding:0 14px;background:#fff;border:1px solid #d9dee7;color:#A32D2D;border-radius:8px;font:inherit;font-size:13px;cursor:pointer">追加目標を削除</button>
+            </div>
+            <div id="goalAddRow" style="display:none;gap:8px;margin-top:8px">
+              <input type="text" id="goalNew" placeholder="新しい連動目標を入力" style="flex:1" />
+              <button type="button" id="goalAddBtn" style="flex-shrink:0;padding:0 16px;background:#1F3864;color:#fff;border:none;border-radius:8px;font:inherit;font-weight:600;cursor:pointer">追加</button>
+            </div>
           </div>
           <div class="field">
             <label>重み（貢献度）</label>
@@ -370,7 +379,7 @@
       what: $("freeText").value.trim(),
       original: $("freeText").value.trim(),
       taskType: $("taskType").value,
-      linkedGoal: $("linkedGoal").value || null,
+      linkedGoal: ($("linkedGoal").value && $("linkedGoal").value!=="__add__") ? $("linkedGoal").value : null,
       weight: $("weight").value,
       priority: selPrio,
       participants: [...selParts],
@@ -425,6 +434,67 @@
 
   // 初期プレビュー
   $("due") && $("due").addEventListener("input", updateRepeatPreview);
+
+  // === 連動目標：追加・削除・過去目標の自動表示 ===
+  (function(){
+    const sel = $("linkedGoal");
+    if(!sel) return;
+    const delBtn = $("goalDelBtn"), addRow = $("goalAddRow"), newInp = $("goalNew"), addBtn = $("goalAddBtn");
+    const addOpt = sel.querySelector('option[value="__add__"]');
+    const curOpt = ()=> sel.options[sel.selectedIndex];
+    const isDeletable = (o)=> !!o && !o.dataset.preset && o.value!=="" && o.value!=="__add__";
+    const refresh = ()=>{ delBtn.disabled = !isDeletable(curOpt()); };
+    function ensureOption(name){
+      name = (name||"").trim();
+      if(!name) return null;
+      for(const o of sel.options){ if(o.textContent===name && o.value!=="__add__") return o; }
+      const o = document.createElement("option");
+      o.textContent = name;
+      sel.insertBefore(o, addOpt);
+      return o;
+    }
+    sel.addEventListener("change", ()=>{
+      if(sel.value==="__add__"){ addRow.style.display="flex"; newInp.focus(); }
+      else { addRow.style.display="none"; }
+      refresh();
+    });
+    delBtn.addEventListener("click", ()=>{
+      const o = curOpt();
+      if(!isDeletable(o)) return;
+      o.remove();
+      sel.value = "その他";
+      refresh();
+    });
+    function addGoal(){
+      const v = (newInp.value||"").trim();
+      if(!v){ newInp.focus(); return; }
+      const o = ensureOption(v);
+      if(o){ o.selected = true; }
+      addRow.style.display="none"; newInp.value="";
+      refresh();
+    }
+    addBtn.addEventListener("click", addGoal);
+    newInp.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ e.preventDefault(); addGoal(); } });
+
+    // 過去タスクで使われた連動目標を選択肢に自動追加（リストが育つ）
+    (async function(){
+      try{
+        const r = await fetch("/api/task-list");
+        if(!r.ok) return;
+        const d = await r.json();
+        if(!d || !d.ok) return;
+        const all = (d.tasks||[]).concat(d.completed||[]);
+        const seen = new Set();
+        for(const o of sel.options){ if(o.value!=="__add__") seen.add(o.textContent); }
+        all.forEach((t)=>{
+          const name = String((t && t.goal) || "").trim();
+          if(name && !seen.has(name)){ seen.add(name); ensureOption(name); }
+        });
+      }catch(e){ /* オフライン等は無視。基本の目標のみ表示 */ }
+    })();
+
+    refresh();
+  })();
 </script>
 </body>
 </html>
