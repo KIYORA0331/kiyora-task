@@ -52,6 +52,9 @@ function mapTask(pg) {
     participants: (p["参加者"] && p["参加者"].multi_select) ? p["参加者"].multi_select.map(o=>o.name) : [],
     carryCount: num(p["繰越回数"]),
     lastModified: pg.last_edited_time,
+    created: pg.created_time,
+    memo: txt(p["メモ"]),
+    doneDate: dat(p["完了日"]),
   };
 }
 

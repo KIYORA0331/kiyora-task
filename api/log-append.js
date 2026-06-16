@@ -19,6 +19,11 @@ function logId() {
   return `LOG-${stamp}-${seq}`;
 }
 
+function jstToday() {
+  const d = new Date(Date.now() + 9 * 3600 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
 async function notion(path, method, body) {
   const r = await fetch(`https://api.notion.com/v1/${path}`, {
     method,
@@ -75,6 +80,26 @@ export default async function handler(req, res) {
       taskProps["When_期限"] = b.due.trim() ? { date: { start: b.due } } : { date: null };
     }
     if (status === "完了") taskProps["現在到達度"] = { number: 100 };
+
+    // タスクメモを上書き保存（空文字ならクリア）。履歴は上の進捗ログに自己評価メモとして残る
+    if (typeof b.memo === "string") {
+      taskProps["メモ"] = b.memo.trim()
+        ? { rich_text: [{ text: { content: b.memo.slice(0, 2000) } }] }
+        : { rich_text: [] };
+    }
+
+    // 完了日：完了に入った日を記録（既に記録済みなら保持）。完了以外に戻ったらクリア
+    if (status === "完了") {
+      let already = null;
+      const cur = await notion(`pages/${b.taskId}`, "GET");
+      if (cur.ok) {
+        const dp = cur.data.properties && cur.data.properties["完了日"];
+        already = (dp && dp.date) ? dp.date.start : null;
+      }
+      taskProps["完了日"] = { date: { start: already || jstToday() } };
+    } else {
+      taskProps["完了日"] = { date: null };
+    }
 
     const taskRes = await notion(`pages/${b.taskId}`, "PATCH", { properties: taskProps });
     if (!taskRes.ok) return res.status(taskRes.status).json({ ok: false, error: "タスク更新失敗: " + (taskRes.data.message || ""), detail: taskRes.data });

@@ -37,6 +37,7 @@ export default async function handler(req, res) {
       "How_方法": rt(b.how),
       "Where_場所": rt(b.where),
       "原文_自由記述": rt(b.original),
+      "メモ": rt(b.memo),
       "タスク種別": sel(b.taskType),
       "連動目標": sel(b.linkedGoal),
       "重み": sel(b.weight || "中"),
