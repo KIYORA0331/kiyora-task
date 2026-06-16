@@ -61,6 +61,18 @@
   .cell .dn{font-size:11px;color:var(--muted);font-weight:500}
   .chip{display:block;max-width:100%;font-size:10.5px;color:#fff;border-radius:3px;padding:2px 5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
   .chip-more{font-size:10px;color:var(--navy);font-weight:600;margin-top:3px;padding:1px 4px}
+  .cal-toggle{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .cal-toggle .ct{font:inherit;font-size:12px;padding:5px 12px;background:#fff;color:var(--muted);border:none;cursor:pointer}
+  .cal-toggle .ct.on{background:var(--navy);color:#fff;font-weight:600}
+  .cal.gantt{display:block;margin-top:4px}
+  .gweek{border:1px solid var(--line);border-radius:7px;padding:4px 5px;margin-bottom:5px;background:var(--card)}
+  .gdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin-bottom:3px}
+  .gcell{min-height:16px}
+  .gdn{font-size:11px;color:var(--muted);font-weight:500}
+  .gcell.today .gdn{color:var(--navy);font-weight:700}
+  .gbars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+  .gbar{font-size:10.5px;color:#fff;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:start;min-width:0}
+  .gbar-empty{grid-column:1/8;height:3px}
   /* 日別モーダルの行 */
   .day-item{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;cursor:pointer;background:#fff;transition:.12s}
   .day-item:hover{border-color:var(--navy);background:var(--bg)}
@@ -129,6 +141,10 @@
     <div class="sec-head">
       <span class="t">カレンダー</span><span class="d">日付をクリックでその日の詳細</span>
       <div class="sp">
+        <div class="cal-toggle" id="calToggle">
+          <button class="ct on" data-mode="active">進行中</button>
+          <button class="ct" data-mode="done">完了</button>
+        </div>
         <label class="muted">色分け</label>
         <select id="colorMode"><option value="member">担当者で自動</option><option value="goal">連動目標で</option><option value="status">ステータスで</option></select>
       </div>
@@ -210,7 +226,7 @@
 
       <div id="mSteps" style="margin-bottom:14px"></div>
 
-      <div class="muted" style="margin-bottom:4px">この回のひとことメモ（任意）</div>
+      <div class="muted" style="margin-bottom:4px">タスクメモ（保存され、何度でも書き直せます）</div>
       <textarea id="mMemo" placeholder="例）先方の様式が届いたので記入中。明日午前に送れそう。" style="margin-bottom:14px"></textarea>
 
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
@@ -270,6 +286,7 @@ let selMPart = new Set();
 let memberSel = new Set();
 let viewY = new Date().getFullYear();
 let viewM = new Date().getMonth();
+let calMode = "active";
 
 const $ = (s)=>document.querySelector(s);
 const memberPass = (t)=> memberSel.size===0 || memberSel.has(t.member);
@@ -423,6 +440,8 @@ function renderLegend(){
 }
 
 function renderCal(){
+  if(calMode==="done"){ $("#cal").classList.add("gantt"); renderDoneCal(); return; }
+  $("#cal").classList.remove("gantt");
   const mode = $("#colorMode").value;
   const now = new Date(), y=viewY, m=viewM;
   $("#calMonth").textContent = `${y}年${m+1}月`;
@@ -447,7 +466,52 @@ function renderCal(){
   $("#cal").innerHTML = cells;
 }
 
-// 日別タスク一覧モーダル
+// 完了タスクのガント帯カレンダー（登録日→完了日）
+function renderDoneCal(){
+  const mode = $("#colorMode").value;
+  const now = new Date(), y=viewY, m=viewM, days=new Date(y,m+1,0).getDate();
+  $("#calMonth").textContent = `${y}年${m+1}月`;
+  const startDow = (new Date(y,m,1).getDay()+6)%7;
+  const mStart = new Date(y,m,1), mEnd = new Date(y,m,days);
+  const dOnly = (iso)=> new Date(String(iso).slice(0,10)+"T00:00:00");
+
+  const bars = COMPLETED.filter(t=>{
+    if(!memberPass(t)) return false;
+    if(!t.created || !t.doneDate) return false;
+    const s=dOnly(t.created), e=dOnly(t.doneDate);
+    return s<=mEnd && e>=mStart;
+  }).map(t=>{
+    const s=dOnly(t.created), e=dOnly(t.doneDate);
+    return { t, color:colorOf(t,mode),
+      sd:(s<mStart)?1:s.getDate(), ed:(e>mEnd)?days:e.getDate(),
+      startsBefore:s<mStart, endsAfter:e>mEnd };
+  });
+
+  const weekCount = Math.ceil((startDow+days)/7);
+  let html = "";
+  for(let w=0; w<weekCount; w++){
+    const dayStart = w*7 - startDow + 1;        // この行の左端の日付（空セルなら<=0）
+    let dayCells = "";
+    for(let col=0; col<7; col++){
+      const d = dayStart+col;
+      if(d<1||d>days){ dayCells += `<div class="gcell"></div>`; continue; }
+      const isToday=(y===now.getFullYear()&&m===now.getMonth()&&d===now.getDate());
+      dayCells += `<div class="gcell ${isToday?'today':''}"><span class="gdn">${d}</span></div>`;
+    }
+    const wkS=Math.max(dayStart,1), wkE=Math.min(dayStart+6,days);
+    let row=0;
+    const segs = bars.filter(b=> b.sd<=wkE && b.ed>=wkS).map(b=>{
+      const segS=Math.max(b.sd,wkS), segE=Math.min(b.ed,wkE);
+      const colStart=segS-dayStart+1, colEnd=segE-dayStart+2;
+      const startsHere=(segS===b.sd && !b.startsBefore), endsHere=(segE===b.ed && !b.endsAfter);
+      const rad=`${startsHere?'4px':'0'} ${endsHere?'4px':'0'} ${endsHere?'4px':'0'} ${startsHere?'4px':'0'}`;
+      row++;
+      return `<div class="gbar" title="${esc(b.t.name)}（${b.t.created.slice(0,10)} → ${b.t.doneDate.slice(0,10)}）" style="grid-column:${colStart}/${colEnd};grid-row:${row};background:${b.color};border-radius:${rad}">${esc(b.t.name)}${endsHere?' ✓':''}</div>`;
+    }).join("");
+    html += `<div class="gweek"><div class="gdays">${dayCells}</div><div class="gbars">${segs||'<div class="gbar-empty"></div>'}</div></div>`;
+  }
+  $("#cal").innerHTML = html || `<div class="muted" style="padding:10px">この月に完了したタスクはありません</div>`;
+}
 function openDayModal(iso){
   const mode = $("#colorMode").value;
   const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && memberPass(t));
@@ -516,7 +580,7 @@ function openModal(idx){
   $("#mTitle").textContent = active.name;
   $("#mMeta").textContent = `担当：${active.member||"未設定"}　現在 ${active.current||0}%　${active.status}`;
   $("#mStatus").value = active.status||"進行中";
-  $("#mMemo").value = "";
+  $("#mMemo").value = active.memo || "";
   // 登録時の作業種別を反映（なければデフォルト）
   const typeMap = {"外部連絡":"外部連絡","書類作成":"書類作成","調査検討":"調査・検討","実作業":"実作業","内部MTG":"内部MTG","申請手続き":"申請手続き"};
   $("#mType").value = typeMap[active.type] || "外部連絡";
@@ -544,7 +608,7 @@ async function save(){
   const dueOut = dDate ? (dTime ? `${dDate}T${dTime}:00+09:00` : dDate) : "";
   const payload = {
     taskId: active.id, member: active.member, before: active.current||0, after,
-    memo: $("#mMemo").value.trim()||null, status,
+    memo: $("#mMemo").value, status,
     priority: selPrio,
     due: dueOut,
     participants: [...selMPart],
@@ -576,6 +640,12 @@ $("#dayOv").addEventListener("click",(e)=>{ if(e.target.id==="dayOv") closeDayMo
 $("#prevMonth").addEventListener("click", ()=>{ closeDayModal(); viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
 $("#nextMonth").addEventListener("click", ()=>{ closeDayModal(); viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
 $("#thisMonth").addEventListener("click", ()=>{ closeDayModal(); const n=new Date(); viewY=n.getFullYear(); viewM=n.getMonth(); renderCal(); });
+document.querySelectorAll("#calToggle .ct").forEach(b=> b.addEventListener("click", ()=>{
+  calMode = b.dataset.mode;
+  document.querySelectorAll("#calToggle .ct").forEach(x=> x.classList.toggle("on", x===b));
+  closeDayModal();
+  renderCal();
+}));
 $("#mSave").addEventListener("click", save);
 $("#mDueClear").addEventListener("click", ()=>{ $("#mDueDate").value=""; $("#mDueTime").value=""; });
 document.querySelectorAll("#mPart .mf-chip").forEach(el=> el.addEventListener("click", ()=>{ const p=el.dataset.p; if(selMPart.has(p)) selMPart.delete(p); else selMPart.add(p); renderMPart(); }));

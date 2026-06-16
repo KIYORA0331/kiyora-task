@@ -188,6 +188,11 @@
           </div>
         </div>
 
+        <div class="field">
+          <label>メモ<span class="hint">任意・あとからダッシュボードで書き直せます</span></label>
+          <textarea id="memoInput" placeholder="例）先方の返信待ち。来週頭に再確認。"></textarea>
+        </div>
+
         <div class="row-inline">
           <label class="chk"><input type="checkbox" id="delegatable" /> 他のメンバーに委譲してもよい（引き受け募集中にする）</label>
         </div>
@@ -384,6 +389,7 @@
       priority: selPrio,
       participants: [...selParts],
       delegatable: $("delegatable").checked,
+      memo: $("memoInput").value.trim() || null,
     };
 
     const isRepeat = $("repeatToggle").checked;
@@ -399,7 +405,7 @@
       if(!isRepeat){
         // 通常登録（1件）
         const data = await registerOne({...basePayload, due: baseDue});
-        if(data.ok){ toast("登録しました"); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
+        if(data.ok){ toast("登録しました"); $("freeText").value=""; $("memoInput").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
         else { toast("登録失敗：" + (data.error||"不明なエラー"), true); }
       } else {
         // 繰り返し登録
@@ -417,7 +423,7 @@
           const data = await registerOne({...basePayload, due: dates[i], taskName: name+(count>1?` [${i+1}回目]`:"")});
           if(data.ok) ok++; else fail++;
         }
-        if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
+        if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("memoInput").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
         else { toast(`${ok}件成功・${fail}件失敗`, fail>0); }
       }
     }catch(e){ toast("通信エラー：" + e.message, true); }
