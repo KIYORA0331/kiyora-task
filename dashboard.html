@@ -64,15 +64,6 @@
   .cal-toggle{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
   .cal-toggle .ct{font:inherit;font-size:12px;padding:5px 12px;background:#fff;color:var(--muted);border:none;cursor:pointer}
   .cal-toggle .ct.on{background:var(--navy);color:#fff;font-weight:600}
-  .cal.gantt{display:block;margin-top:4px}
-  .gweek{border:1px solid var(--line);border-radius:7px;padding:4px 5px;margin-bottom:5px;background:var(--card)}
-  .gdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;margin-bottom:3px}
-  .gcell{min-height:16px}
-  .gdn{font-size:11px;color:var(--muted);font-weight:500}
-  .gcell.today .gdn{color:var(--navy);font-weight:700}
-  .gbars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
-  .gbar{font-size:10.5px;color:#fff;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:start;min-width:0}
-  .gbar-empty{grid-column:1/8;height:3px}
   /* 日別モーダルの行 */
   .day-item{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;cursor:pointer;background:#fff;transition:.12s}
   .day-item:hover{border-color:var(--navy);background:var(--bg)}
@@ -440,9 +431,10 @@ function renderLegend(){
 }
 
 function renderCal(){
-  if(calMode==="done"){ $("#cal").classList.add("gantt"); renderDoneCal(); return; }
-  $("#cal").classList.remove("gantt");
   const mode = $("#colorMode").value;
+  const isDone = (calMode==="done");
+  const src = isDone ? COMPLETED : TASKS;
+  const dateOf = (t)=> ((isDone ? t.doneDate : t.due)||"").slice(0,10);
   const now = new Date(), y=viewY, m=viewM;
   $("#calMonth").textContent = `${y}年${m+1}月`;
   const first = new Date(y,m,1); let startDow = (first.getDay()+6)%7;
@@ -454,64 +446,18 @@ function renderCal(){
   for(let d=1; d<=days; d++){
     const iso = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const isToday = (isThisMonth && d===now.getDate());
-    const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && memberPass(t));
+    const dt = src.filter(t=> dateOf(t)===iso && memberPass(t));
     const shown = dt.slice(0, MAXCHIP);
     const chips = shown.map(t=>{const c=colorOf(t,mode);
       return `<div class="chip" style="background:${c}" title="${esc(t.name)}">${esc(t.name)}</div>`;}).join("");
     const more = dt.length>MAXCHIP ? `<div class="chip-more">＋${dt.length-MAXCHIP}件</div>` : "";
     const hasCls = dt.length ? "has" : "empty";
-    const onclick = dt.length ? ` onclick="openDayModal('${iso}')"` : "";
+    const onclick = dt.length ? ` onclick="${isDone?'openDoneDayModal':'openDayModal'}('${iso}')"` : "";
     cells += `<div class="cell ${isToday?'today':''} ${hasCls}"${onclick}><div class="dn" style="${isToday?'color:var(--navy)':''}">${d}</div>${chips}${more}</div>`;
   }
   $("#cal").innerHTML = cells;
 }
 
-// 完了タスクのガント帯カレンダー（登録日→完了日）
-function renderDoneCal(){
-  const mode = $("#colorMode").value;
-  const now = new Date(), y=viewY, m=viewM, days=new Date(y,m+1,0).getDate();
-  $("#calMonth").textContent = `${y}年${m+1}月`;
-  const startDow = (new Date(y,m,1).getDay()+6)%7;
-  const mStart = new Date(y,m,1), mEnd = new Date(y,m,days);
-  const dOnly = (iso)=> new Date(String(iso).slice(0,10)+"T00:00:00");
-
-  const bars = COMPLETED.filter(t=>{
-    if(!memberPass(t)) return false;
-    if(!t.created || !t.doneDate) return false;
-    const s=dOnly(t.created), e=dOnly(t.doneDate);
-    return s<=mEnd && e>=mStart;
-  }).map(t=>{
-    const s=dOnly(t.created), e=dOnly(t.doneDate);
-    return { t, color:colorOf(t,mode),
-      sd:(s<mStart)?1:s.getDate(), ed:(e>mEnd)?days:e.getDate(),
-      startsBefore:s<mStart, endsAfter:e>mEnd };
-  });
-
-  const weekCount = Math.ceil((startDow+days)/7);
-  let html = "";
-  for(let w=0; w<weekCount; w++){
-    const dayStart = w*7 - startDow + 1;        // この行の左端の日付（空セルなら<=0）
-    let dayCells = "";
-    for(let col=0; col<7; col++){
-      const d = dayStart+col;
-      if(d<1||d>days){ dayCells += `<div class="gcell"></div>`; continue; }
-      const isToday=(y===now.getFullYear()&&m===now.getMonth()&&d===now.getDate());
-      dayCells += `<div class="gcell ${isToday?'today':''}"><span class="gdn">${d}</span></div>`;
-    }
-    const wkS=Math.max(dayStart,1), wkE=Math.min(dayStart+6,days);
-    let row=0;
-    const segs = bars.filter(b=> b.sd<=wkE && b.ed>=wkS).map(b=>{
-      const segS=Math.max(b.sd,wkS), segE=Math.min(b.ed,wkE);
-      const colStart=segS-dayStart+1, colEnd=segE-dayStart+2;
-      const startsHere=(segS===b.sd && !b.startsBefore), endsHere=(segE===b.ed && !b.endsAfter);
-      const rad=`${startsHere?'4px':'0'} ${endsHere?'4px':'0'} ${endsHere?'4px':'0'} ${startsHere?'4px':'0'}`;
-      row++;
-      return `<div class="gbar" title="${esc(b.t.name)}（${b.t.created.slice(0,10)} → ${b.t.doneDate.slice(0,10)}）" style="grid-column:${colStart}/${colEnd};grid-row:${row};background:${b.color};border-radius:${rad}">${esc(b.t.name)}${endsHere?' ✓':''}</div>`;
-    }).join("");
-    html += `<div class="gweek"><div class="gdays">${dayCells}</div><div class="gbars">${segs||'<div class="gbar-empty"></div>'}</div></div>`;
-  }
-  $("#cal").innerHTML = html || `<div class="muted" style="padding:10px">この月に完了したタスクはありません</div>`;
-}
 function openDayModal(iso){
   const mode = $("#colorMode").value;
   const dt = TASKS.filter(t=> (t.due||"").slice(0,10)===iso && memberPass(t));
@@ -534,6 +480,33 @@ function openDayModal(iso){
 }
 function closeDayModal(){ $("#dayOv").classList.remove("on"); }
 function fromDay(idx){ closeDayModal(); openModal(idx); }
+
+function md(iso){ if(!iso) return "—"; const p=iso.slice(0,10).split("-"); return `${p[1]}/${p[2]}`; }
+function spanLabel(createdIso, doneIso){
+  if(!createdIso || !doneIso) return "—";
+  const s=new Date(createdIso.slice(0,10)+"T00:00:00"), e=new Date(doneIso.slice(0,10)+"T00:00:00");
+  const n=Math.round((e-s)/86400000);
+  return n<=0 ? "当日完了" : `${n}日間`;
+}
+function openDoneDayModal(iso){
+  const mode = $("#colorMode").value;
+  const dt = COMPLETED.filter(t=> (t.doneDate||"").slice(0,10)===iso && memberPass(t));
+  const [yy,mm,dd] = iso.split("-").map(Number);
+  $("#dayTitle").textContent = `${mm}月${dd}日 完了`;
+  $("#daySub").textContent = `この日に完了 ${dt.length}件${memberSel.size ? `（${[...memberSel].join("・")}）` : ""}`;
+  $("#dayList").innerHTML = dt.map(t=>{
+    const c = colorOf(t,mode);
+    return `<div class="day-item" style="cursor:default">
+      <span class="ci" style="background:${c}"></span>
+      <div class="di">
+        <div class="dnm">${esc(t.name)}</div>
+        <div class="dsub">${t.member||"未設定"}${(t.goal&&t.goal!=="なし")?`・${esc(t.goal)}`:""}</div>
+        <div class="dsub">登録 ${md(t.created)}　→　完了 ${md(t.doneDate)}　・　<b>${spanLabel(t.created,t.doneDate)}</b></div>
+      </div>
+    </div>`;
+  }).join("") || `<div class="muted">この日に完了したタスクはありません</div>`;
+  $("#dayOv").classList.add("on");
+}
 
 function renderAll(){ renderCards(); renderList(); renderDone(); renderLegend(); renderCal(); }
 
