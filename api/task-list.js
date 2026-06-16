@@ -55,6 +55,7 @@ function mapTask(pg) {
     created: pg.created_time,
     memo: txt(p["メモ"]),
     doneDate: dat(p["完了日"]),
+    confirmed: (p["確認済み"] && p["確認済み"].multi_select) ? p["確認済み"].multi_select.map(o=>o.name) : [],
   };
 }
 

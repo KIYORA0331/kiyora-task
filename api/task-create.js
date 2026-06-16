@@ -6,6 +6,8 @@ const NOTION_TOKEN = process.env.NOTION_TOKEN;
 const TASK_DB_ID = "c41de31d-0338-4c16-8797-11b5c4231512"; // タスクDB（公開しても単体では実害小・トークン無しでは不可）
 const NOTION_VERSION = "2022-06-28";
 
+import { emailFor, sign, sendMail, buildTaskConfirmMail } from "../lib/mail.js";
+
 // 任意のrich_textは空なら省略するためのヘルパ
 const rt = (v) => (v && String(v).trim())
   ? { rich_text: [{ text: { content: String(v).slice(0, 2000) } }] }
@@ -77,7 +79,29 @@ export default async function handler(req, res) {
       return res.status(resp.status).json({ ok: false, error: data.message || "Notion API error", detail: data });
     }
 
-    return res.status(200).json({ ok: true, id: data.id, url: data.url });
+    // 担当者＋参加者の全員へ確認メールを送信（重複除外）。メール失敗でもタスク作成は成功扱い。
+    let notified = [];
+    try {
+      const recipients = Array.from(new Set(
+        [b.assignee, ...(Array.isArray(b.participants) ? b.participants : [])].filter(Boolean)
+      ));
+      const host = req.headers["x-forwarded-host"] || req.headers.host || "kiyora-task.vercel.app";
+      const base = `https://${host}`;
+      const parts = Array.isArray(b.participants) ? b.participants : [];
+      for (const who of recipients) {
+        const addr = emailFor(who);
+        if (!addr) continue;
+        const sig = sign(data.id, who);
+        const confirmUrl = `${base}/confirm.html?task=${encodeURIComponent(data.id)}&who=${encodeURIComponent(who)}&sig=${sig}`;
+        const mail = buildTaskConfirmMail({ taskName: String(b.taskName), who, due: b.due || null, participants: parts, confirmUrl });
+        await sendMail({ to: addr, subject: mail.subject, html: mail.html, text: mail.text });
+        notified.push(who);
+      }
+    } catch (mailErr) {
+      return res.status(200).json({ ok: true, id: data.id, url: data.url, notified, mailWarning: String(mailErr && mailErr.message ? mailErr.message : mailErr) });
+    }
+
+    return res.status(200).json({ ok: true, id: data.id, url: data.url, notified });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
   }
