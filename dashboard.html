@@ -374,6 +374,13 @@ document.getElementById("cards").addEventListener("click", (e)=>{
   applyCardFilter();
 });
 
+function confirmBadge(t){
+  const targets = Array.from(new Set([t.member, ...(t.participants||[])].filter(Boolean)));
+  if(!targets.length) return "";
+  const conf = (t.confirmed||[]).filter(n=> targets.includes(n));
+  const all = conf.length>=targets.length;
+  return `<span class="tag" style="color:${all?'var(--ok)':'var(--muted)'}" title="確認済み：${esc(conf.join('・')||'なし')}／対象：${esc(targets.join('・'))}">${all?'✓ ':''}${conf.length}/${targets.length} 確認</span>`;
+}
 function renderList(){
   const mode = $("#colorMode").value, sm = $("#sortMode").value;
   const list = TASKS.filter(t=> memberPass(t) && cardMatch(t));
@@ -398,6 +405,7 @@ function renderList(){
         ${isDueToday?`<span class="tag" style="color:var(--warn)">本日締切日</span>`:""}
         ${stuck?`<span class="tag" style="color:var(--crit)">滞留</span>`:""}
         ${t.delegatable?`<span class="tag" style="color:var(--warn)">委譲OK</span>`:""}
+        ${confirmBadge(t)}
         <span class="meta">${t.member||"未設定"}${t.participants&&t.participants.length?`（＋${t.participants.join("・")}）`:""}・${fmtDay(t.due)}</span>
       </div>
       <div class="row2">
