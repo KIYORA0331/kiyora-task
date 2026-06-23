@@ -64,6 +64,21 @@
   .cal-toggle{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
   .cal-toggle .ct{font:inherit;font-size:12px;padding:5px 12px;background:#fff;color:var(--muted);border:none;cursor:pointer}
   .cal-toggle .ct.on{background:var(--navy);color:#fff;font-weight:600}
+  /* 円グラフ（A/B） */
+  .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+  .chart-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .chart-ttl{font-size:14px;font-weight:600;color:#1a1a1a}
+  .chart-sub{font-size:12px;color:var(--muted);margin-bottom:10px}
+  .chart-row{display:flex;align-items:center;gap:16px}
+  .donut-wrap{position:relative;width:120px;height:120px;flex:none}
+  .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+  .donut-num{font-size:19px;font-weight:700;color:var(--navy);line-height:1}
+  .donut-unit{font-size:10px;color:var(--muted)}
+  .chart-leg{font-size:12px;line-height:1.85;flex:1;min-width:0}
+  .chart-leg .lg{display:flex;align-items:center;gap:6px}
+  .chart-leg .sw{display:inline-block;width:9px;height:9px;border-radius:2px;flex:none}
+  .chart-leg .lv{color:var(--muted);margin-left:auto;white-space:nowrap}
+  .chart-empty{color:var(--muted);font-size:12px}
   /* 日別モーダルの行 */
   .day-item{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;cursor:pointer;background:#fff;transition:.12s}
   .day-item:hover{border-color:var(--navy);background:var(--bg)}
@@ -130,13 +145,18 @@
 
     <div id="calSection">
     <div class="sec-head">
-      <span class="t">カレンダー</span><span class="d">日付をクリックでその日の詳細</span>
+      <span class="t" id="secTitle">カレンダー</span><span class="d" id="secDesc">日付をクリックでその日の詳細</span>
       <div class="sp">
+        <div class="cal-toggle" id="viewToggle">
+          <button class="ct on" data-view="cal">カレンダー</button>
+          <button class="ct" data-view="chart">グラフ</button>
+        </div>
         <div class="cal-toggle" id="calToggle">
           <button class="ct on" data-mode="active">進行中</button>
           <button class="ct" data-mode="done">完了</button>
+          <button class="ct" data-mode="all">すべて</button>
         </div>
-        <label class="muted">色分け</label>
+        <label class="muted" id="colorModeLabel">色分け</label>
         <select id="colorMode"><option value="member">担当者で自動</option><option value="goal">連動目標で</option><option value="status">ステータスで</option></select>
       </div>
     </div>
@@ -147,8 +167,36 @@
       <button class="btn nav" id="nextMonth" aria-label="次の月">›</button>
       <button class="btn today-btn" id="thisMonth">今月</button>
     </div>
-    <div class="cal-head"><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div><div class="dow">日</div></div>
-    <div class="cal" id="cal"></div>
+    <div id="calBody">
+      <div class="cal-head"><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow">土</div><div class="dow">日</div></div>
+      <div class="cal" id="cal"></div>
+    </div>
+    <div id="chartBody" style="display:none">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-ttl">A. 連動目標別の仕事量</div>
+          <div class="chart-sub">何に関係する仕事が多いか</div>
+          <div class="chart-row">
+            <div class="donut-wrap">
+              <svg width="120" height="120" viewBox="0 0 42 42" id="pieA" role="img" aria-label="連動目標別の円グラフ"></svg>
+              <div class="donut-center"><div class="donut-num" id="totA">0</div><div class="donut-unit">件</div></div>
+            </div>
+            <div class="chart-leg" id="legA"></div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-ttl">B. メンバー別の仕事量</div>
+          <div class="chart-sub">各メンバーが全体の何％を担うか</div>
+          <div class="chart-row">
+            <div class="donut-wrap">
+              <svg width="120" height="120" viewBox="0 0 42 42" id="pieB" role="img" aria-label="メンバー別の円グラフ"></svg>
+              <div class="donut-center"><div class="donut-num" id="totB">0</div><div class="donut-unit">件</div></div>
+            </div>
+            <div class="chart-leg" id="legB"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     </div>
 
     <div class="sec-head">
@@ -278,6 +326,7 @@ let memberSel = new Set();
 let viewY = new Date().getFullYear();
 let viewM = new Date().getMonth();
 let calMode = "active";
+let viewMode = "cal";
 
 const $ = (s)=>document.querySelector(s);
 const memberPass = (t)=> memberSel.size===0 || memberSel.has(t.member);
@@ -440,9 +489,12 @@ function renderLegend(){
 
 function renderCal(){
   const mode = $("#colorMode").value;
-  const isDone = (calMode==="done");
-  const src = isDone ? COMPLETED : TASKS;
-  const dateOf = (t)=> ((isDone ? t.doneDate : t.due)||"").slice(0,10);
+  // 3択：active=未完了のみ / done=完了のみ / all=両方
+  const dateOf = (t)=> ((t.status==="完了" ? (t.doneDate||t.due) : t.due)||"").slice(0,10);
+  let src;
+  if(calMode==="done") src = COMPLETED;
+  else if(calMode==="all") src = TASKS.concat(COMPLETED);
+  else src = TASKS;
   const now = new Date(), y=viewY, m=viewM;
   $("#calMonth").textContent = `${y}年${m+1}月`;
   const first = new Date(y,m,1); let startDow = (first.getDay()+6)%7;
@@ -460,10 +512,66 @@ function renderCal(){
       return `<div class="chip" style="background:${c}" title="${esc(t.name)}">${esc(t.name)}</div>`;}).join("");
     const more = dt.length>MAXCHIP ? `<div class="chip-more">＋${dt.length-MAXCHIP}件</div>` : "";
     const hasCls = dt.length ? "has" : "empty";
-    const onclick = dt.length ? ` onclick="${isDone?'openDoneDayModal':'openDayModal'}('${iso}')"` : "";
+    // モーダルは calMode で決定（all のときは未完了モーダルを既定とする）
+    const modalFn = (calMode==="done") ? "openDoneDayModal" : "openDayModal";
+    const onclick = dt.length ? ` onclick="${modalFn}('${iso}')"` : "";
     cells += `<div class="cell ${isToday?'today':''} ${hasCls}"${onclick}><div class="dn" style="${isToday?'color:var(--navy)':''}">${d}</div>${chips}${more}</div>`;
   }
   $("#cal").innerHTML = cells;
+}
+
+// ===== 円グラフ（A：連動目標別／B：メンバー別） =====
+// 月の判定は期限（due）基準。完了タスクも due で月を揃える。
+function chartSource(){
+  if(calMode==="done") return COMPLETED;
+  if(calMode==="all") return TASKS.concat(COMPLETED);
+  return TASKS;
+}
+function monthTasks(){
+  const ym = `${viewY}-${String(viewM+1).padStart(2,"0")}`;
+  return chartSource().filter(t=> (t.due||"").slice(0,7)===ym && memberPass(t));
+}
+function tally(tasks, keyFn, fallback){
+  const map = {};
+  tasks.forEach(t=>{ const k = keyFn(t) || fallback; map[k] = (map[k]||0)+1; });
+  return map;
+}
+function drawDonut(svgId, legId, totId, data, colorMap){
+  const svg = document.getElementById(svgId);
+  const leg = document.getElementById(legId);
+  const tot = document.getElementById(totId);
+  const entries = Object.entries(data).sort((a,b)=> b[1]-a[1]);
+  const total = entries.reduce((s,e)=> s+e[1], 0);
+  svg.innerHTML = ""; leg.innerHTML = ""; tot.textContent = total;
+  if(!total){
+    svg.innerHTML = '<circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--line)" stroke-width="6"/>';
+    leg.innerHTML = '<span class="chart-empty">この月のタスクはありません</span>';
+    return;
+  }
+  let off = 25;
+  entries.forEach(([k,v])=>{
+    const pct = v/total*100, c = colorMap[k] || "#888780";
+    const ci = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    ci.setAttribute("cx","21"); ci.setAttribute("cy","21"); ci.setAttribute("r","15.9155");
+    ci.setAttribute("fill","none"); ci.setAttribute("stroke",c); ci.setAttribute("stroke-width","6");
+    ci.setAttribute("stroke-dasharray", `${pct.toFixed(2)} ${(100-pct).toFixed(2)}`);
+    ci.setAttribute("stroke-dashoffset", off.toFixed(2));
+    svg.appendChild(ci);
+    off = off - pct;
+    const row = document.createElement("div");
+    row.className = "lg";
+    row.innerHTML = `<span class="sw" style="background:${c}"></span><span>${esc(k)}</span><span class="lv">${v}件・${Math.round(pct)}%</span>`;
+    leg.appendChild(row);
+  });
+}
+function renderChart(){
+  const tasks = monthTasks();
+  drawDonut("pieA","legA","totA", tally(tasks, t=> (t.goal && t.goal!=="なし") ? t.goal : null, "未設定"), goalColor);
+  drawDonut("pieB","legB","totB", tally(tasks, t=> t.member, "未設定"), memberColor);
+}
+function renderView(){
+  if(viewMode==="chart") renderChart();
+  else renderCal();
 }
 
 function openDayModal(iso){
@@ -516,7 +624,7 @@ function openDoneDayModal(iso){
   $("#dayOv").classList.add("on");
 }
 
-function renderAll(){ renderCards(); renderList(); renderDone(); renderLegend(); renderCal(); }
+function renderAll(){ renderCards(); renderList(); renderDone(); renderLegend(); renderView(); }
 
 
 // 完了セクションの開閉
@@ -618,14 +726,27 @@ $("#mClose").addEventListener("click", closeModal);
 $("#ov").addEventListener("click",(e)=>{ if(e.target.id==="ov") closeModal(); });
 $("#dayClose").addEventListener("click", closeDayModal);
 $("#dayOv").addEventListener("click",(e)=>{ if(e.target.id==="dayOv") closeDayModal(); });
-$("#prevMonth").addEventListener("click", ()=>{ closeDayModal(); viewM--; if(viewM<0){viewM=11;viewY--;} renderCal(); });
-$("#nextMonth").addEventListener("click", ()=>{ closeDayModal(); viewM++; if(viewM>11){viewM=0;viewY++;} renderCal(); });
-$("#thisMonth").addEventListener("click", ()=>{ closeDayModal(); const n=new Date(); viewY=n.getFullYear(); viewM=n.getMonth(); renderCal(); });
+$("#prevMonth").addEventListener("click", ()=>{ closeDayModal(); viewM--; if(viewM<0){viewM=11;viewY--;} renderView(); });
+$("#nextMonth").addEventListener("click", ()=>{ closeDayModal(); viewM++; if(viewM>11){viewM=0;viewY++;} renderView(); });
+$("#thisMonth").addEventListener("click", ()=>{ closeDayModal(); const n=new Date(); viewY=n.getFullYear(); viewM=n.getMonth(); renderView(); });
 document.querySelectorAll("#calToggle .ct").forEach(b=> b.addEventListener("click", ()=>{
   calMode = b.dataset.mode;
   document.querySelectorAll("#calToggle .ct").forEach(x=> x.classList.toggle("on", x===b));
   closeDayModal();
-  renderCal();
+  renderView();
+}));
+// カレンダー⇄グラフ ビュー切替
+document.querySelectorAll("#viewToggle .ct").forEach(b=> b.addEventListener("click", ()=>{
+  viewMode = b.dataset.view;
+  document.querySelectorAll("#viewToggle .ct").forEach(x=> x.classList.toggle("on", x===b));
+  const isChart = (viewMode==="chart");
+  $("#calBody").style.display = isChart ? "none" : "";
+  $("#chartBody").style.display = isChart ? "" : "none";
+  // グラフ時は日別チップの色分けセレクトは無関係なので、見出し説明だけ切替
+  $("#secTitle").textContent = isChart ? "仕事量グラフ" : "カレンダー";
+  $("#secDesc").textContent = isChart ? "連動目標別・メンバー別の割合" : "日付をクリックでその日の詳細";
+  closeDayModal();
+  renderView();
 }));
 $("#mSave").addEventListener("click", save);
 $("#mDueClear").addEventListener("click", ()=>{ $("#mDueDate").value=""; $("#mDueTime").value=""; });
