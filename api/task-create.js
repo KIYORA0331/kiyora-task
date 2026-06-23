@@ -87,13 +87,14 @@ export default async function handler(req, res) {
       ));
       const host = req.headers["x-forwarded-host"] || req.headers.host || "kiyora-task.vercel.app";
       const base = `https://${host}`;
+      const dashboardUrl = `${base}/dashboard.html`;
       const parts = Array.isArray(b.participants) ? b.participants : [];
       for (const who of recipients) {
         const addr = emailFor(who);
         if (!addr) continue;
         const sig = sign(data.id, who);
         const confirmUrl = `${base}/confirm.html?task=${encodeURIComponent(data.id)}&who=${encodeURIComponent(who)}&sig=${sig}`;
-        const mail = buildTaskConfirmMail({ taskName: String(b.taskName), who, due: b.due || null, participants: parts, confirmUrl });
+        const mail = buildTaskConfirmMail({ taskName: String(b.taskName), who, due: b.due || null, participants: parts, confirmUrl, dashboardUrl });
         await sendMail({ to: addr, subject: mail.subject, html: mail.html, text: mail.text });
         notified.push(who);
       }
