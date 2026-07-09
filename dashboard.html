@@ -140,8 +140,6 @@
   .cards-head .lbl{font-size:13px;font-weight:700;color:var(--navy)}
   .cards-head .sp{margin-left:auto;display:flex;align-items:center;gap:8px}
   .cards-head .note{font-size:11px;color:var(--muted)}
-  .mcard{position:relative}
-  .mcard .todaybadge{position:absolute;top:8px;right:9px;font-size:9px;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:0 4px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -433,7 +431,7 @@ function renderCards(){
   const isAct = (a,v)=> (cardFilter && cardFilter.act===a && (v===undefined || cardFilter.val===v)) ? " active" : "";
   const clrAct = cardFilter===null ? " active" : "";
   $("#cards").innerHTML = `
-    <button class="mcard${clrAct}" data-act="clear"><span class="todaybadge">今日基準</span><div class="l">今日のタスク</div><div class="v">${todayN}</div></button>
+    <button class="mcard${clrAct}" data-act="clear"><div class="l">今日のタスク</div><div class="v">${todayN}</div></button>
     <button class="mcard${isAct("status","未着手")}" data-act="status" data-val="未着手"><div class="l">未着手</div><div class="v" style="color:#888780">${notStarted}</div></button>
     <button class="mcard${isAct("status","進行中")}" data-act="status" data-val="進行中"><div class="l">進行中</div><div class="v">${prog}</div></button>
     <button class="mcard${isAct("stuck")}" data-act="stuck"><div class="l">繰越・滞留</div><div class="v" style="color:var(--crit)">${stuck}</div></button>
