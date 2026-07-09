@@ -31,6 +31,32 @@ async function queryDB(filter) {
   return data.results || [];
 }
 
+// フィルタ・ソート条件で Notion を全ページ取得する（has_more / next_cursor を辿る）
+async function queryDBAll(body) {
+  let results = [];
+  let cursor = undefined;
+  do {
+    const resp = await fetch(`https://api.notion.com/v1/databases/${TASK_DB_ID}/query`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${NOTION_TOKEN}`,
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_VERSION,
+      },
+      body: JSON.stringify({
+        ...body,
+        page_size: 100,
+        ...(cursor ? { start_cursor: cursor } : {}),
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.message || "Notion query error");
+    results = results.concat(data.results || []);
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+  return results;
+}
+
 function mapTask(pg) {
   const p = pg.properties;
   return {
@@ -72,22 +98,11 @@ export default async function handler(req, res) {
       ],
     });
 
-    // 完了タスク（最新50件）
-    const completedResp = await fetch(`https://api.notion.com/v1/databases/${TASK_DB_ID}/query`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${NOTION_TOKEN}`,
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_VERSION,
-      },
-      body: JSON.stringify({
-        filter: { property: "ステータス", select: { equals: "完了" } },
-        sorts: [{ property: "When_期限", direction: "descending" }],
-        page_size: 50,
-      }),
+    // 完了タスク（全件・When_期限の新しい順）。Notionのページングで最後まで取得する。
+    const completedResults = await queryDBAll({
+      filter: { property: "ステータス", select: { equals: "完了" } },
+      sorts: [{ property: "When_期限", direction: "descending" }],
     });
-    const completedData = await completedResp.json();
-    const completedResults = completedData.results || [];
 
     return res.status(200).json({
       ok: true,
