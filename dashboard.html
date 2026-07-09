@@ -130,6 +130,18 @@
   .done-task{background:var(--card);border:1px solid var(--line);border-left:4px solid #1D9E75;border-radius:0 10px 10px 0;padding:10px 14px;opacity:.75}
   .done-task .nm{font-size:13.5px;font-weight:500;color:var(--muted);text-decoration:line-through}
   .done-task .meta{font-size:11.5px;color:var(--muted)}
+  /* 完了「さらに表示」ボタン（完了リストと同期して開閉） */
+  .done-more{display:none;justify-content:center;margin:6px 0 24px}
+  .done-more.open{display:flex}
+  .btn.more{font:inherit;font-size:13px;font-weight:600;padding:9px 22px;border-radius:8px;border:1px solid var(--navy);background:#fff;color:var(--navy);cursor:pointer}
+  .btn.more:hover{background:#E8EEF7}
+  /* カテゴリー集計 今月/全期間 トグル行 */
+  .cards-head{display:flex;align-items:center;margin-bottom:10px;gap:10px}
+  .cards-head .lbl{font-size:13px;font-weight:700;color:var(--navy)}
+  .cards-head .sp{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .cards-head .note{font-size:11px;color:var(--muted)}
+  .mcard{position:relative}
+  .mcard .todaybadge{position:absolute;top:8px;right:9px;font-size:9px;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:0 4px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -141,6 +153,16 @@
   </div>
 
   <div class="wrap">
+    <div class="cards-head">
+      <span class="lbl">カテゴリー集計</span>
+      <div class="sp">
+        <span class="note">集計対象</span>
+        <div class="cal-toggle" id="periodToggle">
+          <button class="ct on" data-period="month">今月</button>
+          <button class="ct" data-period="all">全期間</button>
+        </div>
+      </div>
+    </div>
     <div class="cards" id="cards"></div>
 
     <div id="calSection">
@@ -220,6 +242,7 @@
       <span class="cnt" id="doneCnt"></span>
     </div>
     <div class="done-list" id="doneList"></div>
+    <div class="done-more" id="doneMore"></div>
   </div>
 
   <div class="ov" id="ov">
@@ -343,6 +366,7 @@ function setupMemberFilter(){
       if(m==="all") memberSel.clear();
       else if(memberSel.has(m)) memberSel.delete(m);
       else memberSel.add(m);
+      doneShown = 50; // 対象が変わるので完了リストの表示件数をリセット
       renderMemberChips(); closeDayModal(); renderAll();
     });
   });
@@ -383,6 +407,9 @@ async function load(){
 }
 
 let cardFilter = null;
+let cardPeriod = "month"; // カテゴリー集計トグル（"month"=今月 / "all"=全期間）デフォルト今月
+let doneShown = 50;       // 完了リストの初期表示件数（「さらに表示」で+50ずつ）
+const curMonthKey = ()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`; };
 function cardMatch(t){
   if(!cardFilter) return true;
   if(cardFilter.act==="status") return t.status===cardFilter.val;
@@ -392,16 +419,21 @@ function cardMatch(t){
 }
 function renderCards(){
   const todayISO = new Date().toISOString().slice(0,10);
+  // 今日のタスクは常に今日基準（今月/全期間トグルの影響を受けない）
   const todayN = TASKS.filter(t=> !t.due || t.due<=todayISO).length;
-  const notStarted = TASKS.filter(t=>t.status==="未着手").length;
-  const prog = TASKS.filter(t=>t.status==="進行中").length;
-  const stuck = TASKS.filter(t=>t.status==="繰越"||t.status==="ブロック").length;
-  const dele = TASKS.filter(t=>t.delegatable).length;
-  const done = COMPLETED.length;
+  // 他5カードの母集団：全期間 or 期限（When_期限）が当月
+  const ym = curMonthKey();
+  const base = (cardPeriod==="month") ? TASKS.filter(t=> (t.due||"").slice(0,7)===ym) : TASKS;
+  const notStarted = base.filter(t=>t.status==="未着手").length;
+  const prog = base.filter(t=>t.status==="進行中").length;
+  const stuck = base.filter(t=>t.status==="繰越"||t.status==="ブロック").length;
+  const dele = base.filter(t=>t.delegatable).length;
+  // 完了済み：今月=完了日が当月 / 全期間=総数
+  const done = (cardPeriod==="month") ? COMPLETED.filter(t=> (t.doneDate||"").slice(0,7)===ym).length : COMPLETED.length;
   const isAct = (a,v)=> (cardFilter && cardFilter.act===a && (v===undefined || cardFilter.val===v)) ? " active" : "";
   const clrAct = cardFilter===null ? " active" : "";
   $("#cards").innerHTML = `
-    <button class="mcard${clrAct}" data-act="clear"><div class="l">今日のタスク</div><div class="v">${todayN}</div></button>
+    <button class="mcard${clrAct}" data-act="clear"><span class="todaybadge">今日基準</span><div class="l">今日のタスク</div><div class="v">${todayN}</div></button>
     <button class="mcard${isAct("status","未着手")}" data-act="status" data-val="未着手"><div class="l">未着手</div><div class="v" style="color:#888780">${notStarted}</div></button>
     <button class="mcard${isAct("status","進行中")}" data-act="status" data-val="進行中"><div class="l">進行中</div><div class="v">${prog}</div></button>
     <button class="mcard${isAct("stuck")}" data-act="stuck"><div class="l">繰越・滞留</div><div class="v" style="color:var(--crit)">${stuck}</div></button>
@@ -469,7 +501,8 @@ function renderList(){
 function renderDone(){
   const list = COMPLETED.filter(memberPass);
   $("#doneCnt").textContent = `${list.length}件`;
-  $("#doneList").innerHTML = list.map(t=>{
+  const slice = list.slice(0, doneShown);
+  $("#doneList").innerHTML = slice.map(t=>{
     const due = t.due ? fmtDay(t.due) : "期限なし";
     return `<div class="done-task">
       <div class="row1" style="display:flex;align-items:center;gap:8px">
@@ -478,6 +511,16 @@ function renderDone(){
       </div>
     </div>`;
   }).join("") || `<div class="loading" style="padding:16px">完了済みタスクなし</div>`;
+  // 「さらに表示」ボタン（残りがある場合のみ）
+  const more = $("#doneMore");
+  const remain = list.length - doneShown;
+  if(remain > 0){
+    const next = Math.min(50, remain);
+    more.innerHTML = `<button class="btn more" id="moreBtn">さらに表示（+${next}件）　残り${remain}件</button>`;
+    $("#moreBtn").onclick = ()=>{ doneShown += 50; renderDone(); };
+  } else {
+    more.innerHTML = "";
+  }
 }
 
 function renderLegend(){
@@ -631,9 +674,18 @@ function renderAll(){ renderCards(); renderList(); renderDone(); renderLegend();
 document.getElementById("doneToggle").addEventListener("click", ()=>{
   const tog = document.getElementById("doneToggle");
   const lst = document.getElementById("doneList");
+  const mre = document.getElementById("doneMore");
   tog.classList.toggle("open");
   lst.classList.toggle("open");
+  mre.classList.toggle("open");
 });
+
+// カテゴリー集計 今月/全期間 トグル（今日のタスクは常に今日基準で据え置き）
+document.querySelectorAll("#periodToggle .ct").forEach(b=> b.addEventListener("click", ()=>{
+  cardPeriod = b.getAttribute("data-period");
+  document.querySelectorAll("#periodToggle .ct").forEach(x=> x.classList.toggle("on", x===b));
+  renderCards();
+}));
 
 function renderSteps(){
   const type = $("#mType").value;
