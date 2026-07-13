@@ -122,7 +122,7 @@
             <label>主担当<span class="hint">色分け・絞り込みの基準</span></label>
             <select id="assignee">
               <option value="">（未設定）</option>
-              <option>菱沼翼</option><option>松田萌華</option><option>林優作</option>
+              <option>菱沼翼</option><option>松田萌華</option><option>林優作</option><option>富永雄伍</option>
             </select>
           </div>
           <div class="field" style="grid-column:1/-1">
@@ -131,6 +131,7 @@
               <button type="button" class="part-chip" data-p="菱沼翼">菱沼翼</button>
               <button type="button" class="part-chip" data-p="松田萌華">松田萌華</button>
               <button type="button" class="part-chip" data-p="林優作">林優作</button>
+              <button type="button" class="part-chip" data-p="富永雄伍">富永雄伍</button>
             </div>
           </div>
           <div class="field">
@@ -183,7 +184,7 @@
           <div class="field">
             <label>提案者</label>
             <select id="proposer">
-              <option selected>菱沼翼</option><option>松田萌華</option><option>林優作</option><option>本人セルフ</option>
+              <option selected>菱沼翼</option><option>松田萌華</option><option>林優作</option><option>富永雄伍</option><option>本人セルフ</option>
             </select>
           </div>
         </div>
@@ -277,6 +278,7 @@
     { re:/ひっしー|菱沼|翼|代表/, name:"菱沼翼" },
     { re:/松田|萌華|もえか|ＰＭ|PM/, name:"松田萌華" },
     { re:/林|優作|経理/, name:"林優作" },
+    { re:/富永|とみなが|雄伍|ゆうご/, name:"富永雄伍" },
   ];
   const GOAL = [
     { re:/Foremount|Vincent|OEM|見積/i, name:"OEM契約" },
