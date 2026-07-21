@@ -411,8 +411,9 @@ const fmtDay = (iso)=>{
   return s;
 };
 const todayStr = ()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; };
-// 開始日があれば「7/21 〜 7/30」、無ければ従来どおり期限のみ
-const fmtRange = (t)=> (t && t.start) ? `${fmtDay(t.start)} 〜 ${fmtDay(t.due)}` : fmtDay(t && t.due);
+// 開始日があり期限と異なる日なら「7/21 〜 7/30」、同日・未設定なら期限のみ
+const fmtRange = (t)=> (t && t.start && t.start.slice(0,10) !== ((t.due||"").slice(0,10)))
+  ? `${fmtDay(t.start)} 〜 ${fmtDay(t.due)}` : fmtDay(t && t.due);
 // 開始日を過ぎているのに未着手＝着手遅れ
 const isLateStart = (t)=> !!(t.start && t.status==="未着手" && t.start.slice(0,10) < todayStr());
 const isOverdue = (t)=> !!(t.due && t.due.slice(0,10) <= todayStr());
