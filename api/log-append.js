@@ -80,7 +80,11 @@ export default async function handler(req, res) {
       taskProps["When_期限"] = b.due.trim() ? { date: { start: b.due } } : { date: null };
     }
     if (typeof b.start === "string") {
-      taskProps["開始日"] = b.start.trim() ? { date: { start: b.start } } : { date: null };
+      // 開始日を空にした場合は期限日で補完する（task-create と同じ扱い）。
+      // 空のままだとNotionのタイムライン（ガント）から消えてしまうため。
+      const fallback = (typeof b.due === "string" && b.due.trim()) ? b.due.trim() : null;
+      const startVal = b.start.trim() || fallback;
+      taskProps["開始日"] = startVal ? { date: { start: startVal } } : { date: null };
     }
     if (status === "完了") taskProps["現在到達度"] = { number: 100 };
 

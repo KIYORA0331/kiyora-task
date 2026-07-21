@@ -9,6 +9,8 @@ const NOTION_TOKEN = process.env.NOTION_TOKEN;
 const TASK_DB_ID = "c41de31d-0338-4c16-8797-11b5c4231512";
 const NOTION_VERSION = "2022-06-28";
 
+import { emailFor, sendMail, buildLateStartMail } from "../lib/mail.js";
+
 // 【判断】サーバ（Vercel）はUTCで動くため、JSTの「今日」を明示的に算出する。
 // これをしないと深夜帯（JST 0:00〜9:00）に日付が1日ずれ、繰越判定を誤る。
 function todayJST() {
@@ -96,7 +98,86 @@ export default async function handler(req, res) {
       carried++;
     }
 
-    return res.status(200).json({ ok: true, date: today, scanned: pages.length, carried, skipped });
+    // ─────────────────────────────────────────────
+    // 着手遅れ通知
+    // 【判断】必ず繰越処理の「後」に実行する。期限切れの未着手タスクは上で
+    // 「繰越」に変わるため、この時点で残る未着手＝期限内なのに着手予定日を
+    // 過ぎているタスクだけになる。繰越通知との二重送信を構造的に防いでいる。
+    // 重複送信防止は「着手遅れ通知日」で行う（最終繰越日と同じ考え方）。
+    let lateNotified = [];
+    let lateScanned = 0;
+    let mailWarning = null;
+    try {
+      const lateFilter = {
+        and: [
+          { property: "ステータス", select: { equals: "未着手" } },
+          { property: "開始日", date: { before: today } },
+          {
+            or: [
+              { property: "着手遅れ通知日", date: { is_empty: true } },
+              { property: "着手遅れ通知日", date: { before: today } },
+            ],
+          },
+        ],
+      };
+
+      let latePages = [];
+      let lateCursor = undefined;
+      do {
+        const data = await notion(`databases/${TASK_DB_ID}/query`, "POST", {
+          filter: lateFilter,
+          start_cursor: lateCursor,
+          page_size: 100,
+        });
+        latePages = latePages.concat(data.results || []);
+        lateCursor = data.has_more ? data.next_cursor : undefined;
+      } while (lateCursor);
+
+      lateScanned = latePages.length;
+
+      // 担当者ごとにまとめる（担当者未設定は通知しない）
+      const byMember = new Map();
+      for (const pg of latePages) {
+        const p = pg.properties;
+        const who = (p["担当者"] && p["担当者"].select) ? p["担当者"].select.name : null;
+        if (!who) continue;
+        const name = (p["タスク名"] && p["タスク名"].title && p["タスク名"].title[0])
+          ? p["タスク名"].title[0].plain_text : "(無題)";
+        const start = (p["開始日"] && p["開始日"].date) ? p["開始日"].date.start : null;
+        const due = (p["When_期限"] && p["When_期限"].date) ? p["When_期限"].date.start : null;
+        if (!byMember.has(who)) byMember.set(who, []);
+        byMember.get(who).push({ id: pg.id, name, start, due });
+      }
+
+      const host = req.headers["x-forwarded-host"] || req.headers.host || "kiyora-task.vercel.app";
+      const dashboardUrl = `https://${host}/dashboard.html`;
+
+      for (const [who, items] of byMember) {
+        const addr = emailFor(who);
+        // メールアドレス未登録の場合は送らない。通知日も立てないので、
+        // アドレス登録後にあらためて通知される。
+        if (!addr) continue;
+
+        const mail = buildLateStartMail({ who, tasks: items, dashboardUrl });
+        await sendMail({ to: addr, subject: mail.subject, html: mail.html, text: mail.text });
+
+        // 送信できたものだけ通知済みの印を付ける（当日の再送を防ぐ）
+        for (const it of items) {
+          await notion(`pages/${it.id}`, "PATCH", {
+            properties: { "着手遅れ通知日": { date: { start: today } } },
+          });
+        }
+        lateNotified.push({ who, count: items.length });
+      }
+    } catch (mailErr) {
+      // 通知に失敗しても繰越処理の結果は返す（ダッシュボード表示を止めない）
+      mailWarning = String(mailErr && mailErr.message ? mailErr.message : mailErr);
+    }
+
+    return res.status(200).json({
+      ok: true, date: today, scanned: pages.length, carried, skipped,
+      lateScanned, lateNotified, mailWarning,
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e && e.message ? e.message : e) });
   }

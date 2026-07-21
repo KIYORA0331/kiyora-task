@@ -59,8 +59,13 @@ export default async function handler(req, res) {
     }
 
     // 開始日（ISO日付文字列があれば）。期限とは独立の任意項目。
-    if (b.start && String(b.start).trim()) {
-      props["開始日"] = { date: { start: String(b.start) } };
+    // 【判断】未入力なら期限日を開始日として記録する。Notionのタイムライン（ガント）は
+    // 開始日が空のレコードを描画しないため、空のままだと新規タスクがガントから消える。
+    // 「着手予定日が未申告＝期限日に着手する予定」とみなす扱いで、着手遅れ通知も誤発火しない。
+    const startVal = (b.start && String(b.start).trim()) ? String(b.start)
+      : (b.due && String(b.due).trim()) ? String(b.due) : null;
+    if (startVal) {
+      props["開始日"] = { date: { start: startVal } };
     }
 
     // null を除去
