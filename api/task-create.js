@@ -58,6 +58,11 @@ export default async function handler(req, res) {
       props["When_期限"] = { date: { start: String(b.due) } };
     }
 
+    // 開始日（ISO日付文字列があれば）。期限とは独立の任意項目。
+    if (b.start && String(b.start).trim()) {
+      props["開始日"] = { date: { start: String(b.start) } };
+    }
+
     // null を除去
     Object.keys(props).forEach((k) => { if (props[k] === null) delete props[k]; });
 
@@ -94,7 +99,7 @@ export default async function handler(req, res) {
         if (!addr) continue;
         const sig = sign(data.id, who);
         const confirmUrl = `${base}/confirm.html?task=${encodeURIComponent(data.id)}&who=${encodeURIComponent(who)}&sig=${sig}`;
-        const mail = buildTaskConfirmMail({ taskName: String(b.taskName), who, due: b.due || null, participants: parts, confirmUrl, dashboardUrl });
+        const mail = buildTaskConfirmMail({ taskName: String(b.taskName), who, start: b.start || null, due: b.due || null, participants: parts, confirmUrl, dashboardUrl });
         await sendMail({ to: addr, subject: mail.subject, html: mail.html, text: mail.text });
         notified.push(who);
       }

@@ -66,6 +66,7 @@ function mapTask(pg) {
     proposer: sel(p["提案者"]),
     what: txt(p["What_内容"]),
     due: dat(p["When_期限"]),
+    start: dat(p["開始日"]),
     type: sel(p["タスク種別"]),
     current: num(p["現在到達度"]),
     planned: num(p["予定到達度"]),

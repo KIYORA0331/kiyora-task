@@ -79,6 +79,9 @@ export default async function handler(req, res) {
     if (typeof b.due === "string") {
       taskProps["When_期限"] = b.due.trim() ? { date: { start: b.due } } : { date: null };
     }
+    if (typeof b.start === "string") {
+      taskProps["開始日"] = b.start.trim() ? { date: { start: b.start } } : { date: null };
+    }
     if (status === "完了") taskProps["現在到達度"] = { number: 100 };
 
     // タスクメモを上書き保存（空文字ならクリア）。履歴は上の進捗ログに自己評価メモとして残る
