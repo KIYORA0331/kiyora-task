@@ -174,9 +174,22 @@ function renderLegend(){
   $("#legend").innerHTML = h;
 }
 
+// タスクの表示範囲を返す（開始日が無ければ期限日のみの1日扱い）
+function taskSpan(t){
+  const e = dpart(t.due) || dpart(t.start);
+  const s = dpart(t.start) || e;
+  // 開始日が期限より後に設定されていた場合は期限日のみ表示に倒す
+  return (s && e && s <= e) ? { s, e } : { s: e, e };
+}
+
 function itemsOn(iso){
   const items = [];
-  if(showTask) TASKS.filter(t=> dpart(t.due)===iso && memberPassTask(t)).forEach(t=> items.push({kind:"task", obj:t}));
+  if(showTask) TASKS.filter(memberPassTask).forEach(t=>{
+    const { s, e } = taskSpan(t);
+    if(!e || iso < s || iso > e) return;
+    const pos = (s === e) ? "single" : (iso === s ? "start" : (iso === e ? "end" : "mid"));
+    items.push({ kind:"task", obj:t, pos });
+  });
   if(showEvent) EVENTS.filter(e=> dpart(e.datetime)===iso && memberPassEvent(e)).forEach(e=> items.push({kind:"event", obj:e}));
   return items;
 }
@@ -195,7 +208,19 @@ function renderMonth(){
     const isToday = (isThisMonth && d===now.getDate());
     const items = itemsOn(iso);
     const chips = items.slice(0,MAX).map(it=>{
-      if(it.kind==="task"){ const c=colorOf(it.obj.member); return `<div class="chip task" style="background:${c}" title="${esc(it.obj.name)}">${esc(it.obj.name)}</div>`; }
+      if(it.kind==="task"){
+        const c=colorOf(it.obj.member);
+        const p=it.pos;
+        // 期間の途中は薄く角なし、開始日は左だけ角丸、締切日は濃く右だけ角丸
+        const st = p==="mid"  ? "opacity:.42;border-radius:0"
+                 : p==="start"? "opacity:.62;border-radius:3px 0 0 3px"
+                 : p==="end"  ? "border-radius:0 3px 3px 0"
+                 : "";
+        // 途中の日はラベルを出さずバーだけにして月表示の情報量を抑える
+        const label = (p==="mid") ? "&nbsp;" : esc(it.obj.name);
+        const tip = (p==="single") ? esc(it.obj.name) : `${esc(it.obj.name)}（${p==="end"?"締切日":p==="start"?"着手日":"作業期間中"}）`;
+        return `<div class="chip task" style="background:${c};${st}" title="${tip}">${label}</div>`;
+      }
       const tm = tpart(it.obj.datetime); return `<div class="chip event" title="${esc(it.obj.name)}">${tm?tm+" ":""}${esc(it.obj.name)}</div>`;
     }).join("");
     const more = items.length>MAX ? `<div class="chip-more">＋${items.length-MAX}件</div>` : "";
@@ -210,11 +235,15 @@ function itemHTML(it){
   if(it.kind==="task"){
     const t=it.obj, c=colorOf(t.member);
     const parts = t.participants&&t.participants.length?`（＋${t.participants.join("・")}）`:"";
-    return `<div class="day-item">
+    const md = (iso)=> iso ? `${(+iso.slice(5,7))}/${(+iso.slice(8,10))}` : "";
+    const range = t.start ? `${md(dpart(t.start))}〜${md(dpart(t.due))}` : md(dpart(t.due));
+    const posLabel = it.pos==="end" ? "締切日" : it.pos==="start" ? "着手日" : it.pos==="mid" ? "作業期間中" : "";
+    const dim = it.pos==="mid" ? "opacity:.6" : "";
+    return `<div class="day-item" style="${dim}">
       <span class="ci" style="background:${c}"></span>
       <div class="di">
-        <div class="nm"><span class="badge task">タスク</span>${esc(t.name)}</div>
-        <div class="sub">${esc(t.member||"未設定")}${parts}・${t.status||""}・${t.current||0}%</div>
+        <div class="nm"><span class="badge task">${posLabel||"タスク"}</span>${esc(t.name)}</div>
+        <div class="sub">${esc(t.member||"未設定")}${parts}・${esc(range)}・${t.status||""}・${t.current||0}%</div>
       </div>
     </div>`;
   }
@@ -291,7 +320,7 @@ async function load(){
       fetch("/api/task-list").then(r=>r.json()).catch(()=>({ok:false})),
       fetch("/api/event-list").then(r=>r.json()).catch(()=>({ok:false})),
     ]);
-    TASKS = (tr && tr.ok && Array.isArray(tr.tasks)) ? tr.tasks.filter(t=>t.due) : [];
+    TASKS = (tr && tr.ok && Array.isArray(tr.tasks)) ? tr.tasks.filter(t=>t.due || t.start) : [];
     EVENTS = (er && er.ok && Array.isArray(er.events)) ? er.events : [];
     let errs = [];
     if(!tr || !tr.ok) errs.push("タスクの読み込みに失敗しました");

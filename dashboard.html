@@ -270,6 +270,13 @@
         <span class="muted" style="margin-left:auto;font-size:11px">星5が最優先</span>
       </div>
 
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <label class="muted">開始</label>
+        <input type="date" id="mStartDate" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:#fcfdff;color:var(--ink)">
+        <input type="time" id="mStartTime" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:#fcfdff;color:var(--ink)">
+        <button class="btn" id="mStartClear" style="font-size:11px;padding:5px 10px">クリア</button>
+      </div>
+
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
         <label class="muted">締切</label>
         <input type="date" id="mDueDate" style="font:inherit;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:#fcfdff;color:var(--ink)">
@@ -404,6 +411,10 @@ const fmtDay = (iso)=>{
   return s;
 };
 const todayStr = ()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; };
+// 開始日があれば「7/21 〜 7/30」、無ければ従来どおり期限のみ
+const fmtRange = (t)=> (t && t.start) ? `${fmtDay(t.start)} 〜 ${fmtDay(t.due)}` : fmtDay(t && t.due);
+// 開始日を過ぎているのに未着手＝着手遅れ
+const isLateStart = (t)=> !!(t.start && t.status==="未着手" && t.start.slice(0,10) < todayStr());
 const isOverdue = (t)=> !!(t.due && t.due.slice(0,10) <= todayStr());
 const prio = (t)=> (typeof t.priority==="number" && t.priority>=1 && t.priority<=5) ? t.priority : 3;
 function starsSm(p){
@@ -510,9 +521,10 @@ function renderList(){
         ${isPast?`<span class="tag" style="color:var(--crit)">期限切れ</span>`:""}
         ${isDueToday?`<span class="tag" style="color:var(--warn)">本日締切日</span>`:""}
         ${stuck?`<span class="tag" style="color:var(--crit)">滞留</span>`:""}
+        ${isLateStart(t)?`<span class="tag" style="color:var(--warn)">着手遅れ</span>`:""}
         ${t.delegatable?`<span class="tag" style="color:var(--warn)">委譲OK</span>`:""}
         ${confirmBadge(t)}
-        <span class="meta">${t.member||"未設定"}${t.participants&&t.participants.length?`（＋${t.participants.join("・")}）`:""}・${fmtDay(t.due)}</span>
+        <span class="meta">${t.member||"未設定"}${t.participants&&t.participants.length?`（＋${t.participants.join("・")}）`:""}・${fmtRange(t)}</span>
       </div>
       <div class="row2">
         <div class="bar"><i style="width:${t.current||0}%;background:${c}"></i></div>
@@ -742,6 +754,9 @@ function openModal(idx){
   const due = active.due || "";
   $("#mDueDate").value = due ? due.slice(0,10) : "";
   $("#mDueTime").value = (due.length>10 && due.slice(11,16)!=="00:00") ? due.slice(11,16) : "";
+  const st = active.start || "";
+  $("#mStartDate").value = st ? st.slice(0,10) : "";
+  $("#mStartTime").value = (st.length>10 && st.slice(11,16)!=="00:00") ? st.slice(11,16) : "";
   selMPart = new Set(active.participants || []);
   renderMPart();
   $("#mTitle").textContent = active.name;
@@ -773,11 +788,15 @@ async function save(){
   const status = $("#mStatus").value;
   const dDate = $("#mDueDate").value, dTime = $("#mDueTime").value;
   const dueOut = dDate ? (dTime ? `${dDate}T${dTime}:00+09:00` : dDate) : "";
+  const sDate = $("#mStartDate").value, sTime = $("#mStartTime").value;
+  const startOut = sDate ? (sTime ? `${sDate}T${sTime}:00+09:00` : sDate) : "";
+  if(sDate && dDate && sDate > dDate){ alert("開始日が締切日より後になっています"); return; }
   const payload = {
     taskId: active.id, member: active.member, before: active.current||0, after,
     memo: $("#mMemo").value, status,
     priority: selPrio,
     due: dueOut,
+    start: startOut,
     participants: [...selMPart],
     blockCause: ["繰越","ブロック"].includes(status)?$("#mBlockCause").value:null,
     blockReason: ["繰越","ブロック"].includes(status)?($("#mMemo").value.trim()||null):null,
@@ -862,6 +881,7 @@ document.querySelectorAll("#viewToggle .ct").forEach(b=> b.addEventListener("cli
 }));
 $("#mSave").addEventListener("click", save);
 $("#mDueClear").addEventListener("click", ()=>{ $("#mDueDate").value=""; $("#mDueTime").value=""; });
+$("#mStartClear").addEventListener("click", ()=>{ $("#mStartDate").value=""; $("#mStartTime").value=""; });
 document.querySelectorAll("#mPart .mf-chip").forEach(el=> el.addEventListener("click", ()=>{ const p=el.dataset.p; if(selMPart.has(p)) selMPart.delete(p); else selMPart.add(p); renderMPart(); }));
 
 load();

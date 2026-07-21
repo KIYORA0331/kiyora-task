@@ -135,11 +135,17 @@
             </div>
           </div>
           <div class="field">
-            <label>締切日<span class="hint">時刻は任意</span></label>
-            <div style="display:flex;gap:8px">
+            <label>期間<span class="hint">開始日・時刻は任意／締切日のみでもOK</span></label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="date" id="startDate" style="flex:1.4" />
+              <input type="time" id="startTime" style="flex:1" />
+            </div>
+            <div style="text-align:center;color:#888;font-size:12px;margin:2px 0">〜</div>
+            <div style="display:flex;gap:8px;align-items:center">
               <input type="date" id="due" style="flex:1.4" />
               <input type="time" id="dueTime" style="flex:1" />
             </div>
+            <div id="rangeWarn" style="color:#c0392b;font-size:12px;margin-top:4px"></div>
           </div>
           <div class="field">
             <label>連動目標</label>
@@ -364,6 +370,9 @@
     $("weight").value     = parseWeight(text);
     $("due").value        = parseDue(text);
     $("dueTime").value    = "";
+    $("startDate").value  = "";
+    $("startTime").value  = "";
+    checkRange();
     $("parsedBox").style.display = "block";
     $("parsedBox").scrollIntoView({behavior:"smooth", block:"nearest"});
     updateRepeatPreview();
@@ -397,8 +406,13 @@
     const isRepeat = $("repeatToggle").checked;
     const dateVal = $("due").value;            // "YYYY-MM-DD" or ""
     const timeVal = $("dueTime").value;        // "HH:MM" or ""
+    const sDateVal = $("startDate").value;     // "YYYY-MM-DD" or ""
+    const sTimeVal = $("startTime").value;     // "HH:MM" or ""
     const mkDue = (ds)=> ds ? (timeVal ? `${ds}T${timeVal}:00+09:00` : ds) : null;
+    const mkStart = (ds)=> ds ? (sTimeVal ? `${ds}T${sTimeVal}:00+09:00` : ds) : null;
+    if(sDateVal && dateVal && sDateVal > dateVal){ toast("開始日が締切日より後になっています", true); return; }
     const baseDue = mkDue(dateVal);
+    const baseStart = mkStart(sDateVal);
     const days = getIntervalDays();
     const count = parseInt($("repeatCount").value);
 
@@ -406,7 +420,7 @@
     try{
       if(!isRepeat){
         // 通常登録（1件）
-        const data = await registerOne({...basePayload, due: baseDue});
+        const data = await registerOne({...basePayload, due: baseDue, start: baseStart});
         if(data.ok){ toast("登録しました"); $("freeText").value=""; $("memoInput").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
         else { toast("登録失敗：" + (data.error||"不明なエラー"), true); }
       } else {
@@ -414,15 +428,19 @@
         if(!dateVal){ toast("繰り返し登録には締切日の設定が必要です", true); return; }
         if(!days){ toast("繰り返し間隔を正しく設定してください", true); return; }
         const dates = [baseDue];
+        const starts = [baseStart];
         for(let i=1;i<count;i++){
           const d = new Date(dateVal+"T00:00:00"); d.setDate(d.getDate()+days*i);
           dates.push(mkDue(toISO(d)));
+          // 開始日も同じ日数だけずらす（未設定なら null のまま）
+          if(sDateVal){ const s = new Date(sDateVal+"T00:00:00"); s.setDate(s.getDate()+days*i); starts.push(mkStart(toISO(s))); }
+          else { starts.push(null); }
         }
         let ok=0, fail=0;
         for(let i=0; i<dates.length; i++){
           const label = count > 1 ? `（${i+1}/${dates.length}）` : "";
           btn.textContent = `登録中${label}…`;
-          const data = await registerOne({...basePayload, due: dates[i], taskName: name+(count>1?` [${i+1}回目]`:"")});
+          const data = await registerOne({...basePayload, due: dates[i], start: starts[i], taskName: name+(count>1?` [${i+1}回目]`:"")});
           if(data.ok) ok++; else fail++;
         }
         if(fail===0){ toast(`${ok}件まとめて登録しました`); $("freeText").value=""; $("memoInput").value=""; $("parsedBox").style.display="none"; selPrio=3; renderPrio(); selParts.clear(); renderParts(); }
@@ -442,6 +460,17 @@
 
   // 初期プレビュー
   $("due") && $("due").addEventListener("input", updateRepeatPreview);
+
+  // 期間の前後関係チェック（開始日 > 締切日 なら警告）
+  function checkRange(){
+    const s = $("startDate") ? $("startDate").value : "";
+    const d = $("due") ? $("due").value : "";
+    const w = $("rangeWarn");
+    if(!w) return;
+    w.textContent = (s && d && s > d) ? "開始日が締切日より後になっています" : "";
+  }
+  $("startDate") && $("startDate").addEventListener("input", checkRange);
+  $("due") && $("due").addEventListener("input", checkRange);
 
   // === 連動目標：追加・削除・過去目標の自動表示 ===
   (function(){
